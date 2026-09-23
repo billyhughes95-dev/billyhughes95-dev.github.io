@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="MyWorkoutTracker">
   <style>
-    .bar{ fill:#2F6FB5 } .iron{ fill:#16181C }
-    @media (prefers-color-scheme: dark){ .bar{ fill:#4A83C4 } .iron{ fill:#E9ECF0 } }
+    .bar{ fill:#4A83C4 } .iron{ fill:#E9ECF0 }
   </style>
   <g class="bar">
     <rect x="6" y="17.5" width="5" height="7" rx="1.4" opacity="0.45"/>
