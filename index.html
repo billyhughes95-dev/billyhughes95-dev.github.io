@@ -4,7 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="A gym log that tells you what to lift today.">
-<meta name="theme-color" content="#f6f7f8">
+
+<!-- Status bar / browser chrome tint. Two tags so the bar follows the theme
+     instead of being pinned to one colour. -->
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F6F7F8">
+<meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#111317">
+
+<!-- Home screen app -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Workout">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
   :root{ color-scheme: light dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
