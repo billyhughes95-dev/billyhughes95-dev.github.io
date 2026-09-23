@@ -78,6 +78,22 @@ tailwind.config = {
 body{ background: rgb(var(--ground)); color: rgb(var(--ink)); font-family: Barlow, ui-sans-serif, system-ui, sans-serif; }
 html, body { height: 100%; }
 input, select, textarea, button { color-scheme: dark; }
+/* iOS Safari zooms the whole page when a focused control is under 16px. */
+input, select, textarea { font-size: 16px; }
+
+/* Tapping + and − in quick succession reads as a double-tap, and the page zooms.
+   `manipulation` switches off that one gesture. Pinch zoom and scrolling are
+   untouched, so the page can still be zoomed by anyone who needs to. */
+body{ touch-action: manipulation; }
+
+/* Fast repeated taps shouldn't select the button's label, flash a grey box,
+   or raise the long-press menu. */
+button{
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
 
 .eyebrow{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:rgb(var(--ink3)); }
 .tnum{ font-variant-numeric: tabular-nums; }
@@ -136,15 +152,10 @@ input[type=number]{ -moz-appearance:textfield; }
     <!-- ── TRAIN ───────────────────────────────────────────────── -->
     <section id="view-train" role="tabpanel">
 
-      <div id="sample-banner" class="mb-4 card rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]" hidden>
-        <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"></span>
-        <span class="text-ink2">Showing <strong class="text-ink font-semibold">three weeks of example data</strong> so you can see how it works.</span>
-        <button id="clear-sample" class="ml-auto font-semibold text-accent hover:underline">Start my own log &rarr;</button>
-      </div>
 
       <div class="flex items-baseline justify-between gap-3 mb-2">
         <h1 class="font-cond font-bold text-2xl tracking-tight uppercase">Today&rsquo;s session</h1>
-        <input id="date" type="date" class="bg-surface border border-line rounded-md px-2 py-1 text-[13px] font-mono tnum text-ink2" aria-label="Session date">
+        <input id="date" type="date" class="bg-surface border border-line rounded-md px-2 py-1 text-[16px] font-mono tnum text-ink2" aria-label="Session date">
       </div>
 
       <div id="day-picker" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" role="group" aria-label="Choose session"></div>
@@ -335,7 +346,6 @@ const fmtDate  = s => parseISO(s).toLocaleDateString(undefined, { weekday:'short
 function blankState(){
   return {
     v: 1,
-    sample: false,
     settings: { startDate: todayISO(), daysPerWeek: 4, barWeight: 20 },
     sessions: [],
     ui: { tab: 'train', day: 'push', date: todayISO() }
@@ -626,19 +636,19 @@ function renderSession(){
       return `<div class="flex items-center gap-2 py-1.5 ${i ? 'border-t border-line' : ''}" data-row="${lift.id}-${i}">
         <span class="eyebrow w-9 shrink-0">Set ${i+1}</span>
         <div class="flex items-center rounded-md border border-line overflow-hidden bg-ground">
-          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Less weight">&minus;</button>
-          <input class="inp w-14 h-8 bg-transparent text-center font-mono text-[13px] tnum text-ink" type="number" inputmode="decimal" step="${lift.inc}" min="0"
+          <button class="step w-7 h-9 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Less weight">&minus;</button>
+          <input class="inp w-12 h-9 bg-transparent text-center font-mono text-[16px] tnum text-ink" type="number" inputmode="decimal" step="${lift.inc}" min="0"
                  value="${kg}" placeholder="${c.kg != null ? fmtKg(c.kg) : '–'}" data-f="kg" data-i="${i}" data-id="${lift.id}" aria-label="Set ${i+1} weight in kg">
-          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More weight">+</button>
+          <button class="step w-7 h-9 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More weight">+</button>
         </div>
-        <span class="eyebrow -ml-1">kg</span>
+        <span class="eyebrow -ml-1 hidden xs:inline">kg</span>
         <div class="flex items-center rounded-md border border-line overflow-hidden bg-ground">
-          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Fewer reps">&minus;</button>
-          <input class="inp w-11 h-8 bg-transparent text-center font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" step="1" min="0"
+          <button class="step w-7 h-9 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Fewer reps">&minus;</button>
+          <input class="inp w-10 h-9 bg-transparent text-center font-mono text-[16px] tnum text-ink" type="number" inputmode="numeric" step="1" min="0"
                  value="${reps}" placeholder="${lift.hi}" data-f="reps" data-i="${i}" data-id="${lift.id}" aria-label="Set ${i+1} reps">
-          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More reps">+</button>
+          <button class="step w-7 h-9 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More reps">+</button>
         </div>
-        <span class="eyebrow -ml-1">reps</span>
+        <span class="eyebrow -ml-1 hidden xs:inline">reps</span>
         ${tickHTML(doneSet)}
       </div>`;
     }).join('');
@@ -697,18 +707,18 @@ function renderCardio(){
       </div>
       <div class="px-3.5 pb-3.5 border-t border-line pt-3 grid gap-3 sm:grid-cols-2">
         <label class="block"><span class="eyebrow block mb-1">Type</span>
-          <select class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[13px] text-ink" data-k="type">
+          <select class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[16px] text-ink" data-k="type">
             <option value="">Choose…</option>${CARDIO_TYPES.map(t => `<option ${f('type','')===t?'selected':''}>${t}</option>`).join('')}</select></label>
         <label class="block"><span class="eyebrow block mb-1">Minutes</span>
-          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" min="0" placeholder="30" value="${f('minutes','')}" data-k="minutes"></label>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[16px] tnum text-ink" type="number" inputmode="numeric" min="0" placeholder="30" value="${f('minutes','')}" data-k="minutes"></label>
         <label class="block"><span class="eyebrow block mb-1">Distance (km)</span>
-          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="decimal" step="0.1" min="0" placeholder="4.0" value="${f('km','')}" data-k="km"></label>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[16px] tnum text-ink" type="number" inputmode="decimal" step="0.1" min="0" placeholder="4.0" value="${f('km','')}" data-k="km"></label>
         <label class="block"><span class="eyebrow block mb-1">Core rounds</span>
-          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" min="0" max="10" placeholder="3" value="${f('core','')}" data-k="core"></label>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[16px] tnum text-ink" type="number" inputmode="numeric" min="0" max="10" placeholder="3" value="${f('core','')}" data-k="core"></label>
         <label class="flex items-center gap-2 sm:col-span-2 text-[13px] text-ink2">
           <input class="cf w-4 h-4 accent-cardio" type="checkbox" ${f('intervals',false)?'checked':''} data-k="intervals"> Intervals rather than steady state</label>
         <label class="block sm:col-span-2"><span class="eyebrow block mb-1">Notes</span>
-          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[13px] text-ink" type="text" placeholder="How did it feel?" value="${(f('notes','')+'').replace(/"/g,'&quot;')}" data-k="notes"></label>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[16px] text-ink" type="text" placeholder="How did it feel?" value="${(f('notes','')+'').replace(/"/g,'&quot;')}" data-k="notes"></label>
       </div>
     </article>`);
 
@@ -820,9 +830,9 @@ function renderPlan(){
       <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-3">Settings</h2>
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="block"><span class="eyebrow block mb-1">Program start date</span>
-          <input id="set-start" type="date" value="${S.settings.startDate}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink"></label>
+          <input id="set-start" type="date" value="${S.settings.startDate}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[16px] tnum text-ink"></label>
         <label class="block"><span class="eyebrow block mb-1">Barbell weight (kg)</span>
-          <input id="set-bar" type="number" step="0.5" min="0" value="${S.settings.barWeight}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink"></label>
+          <input id="set-bar" type="number" step="0.5" min="0" value="${S.settings.barWeight}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[16px] tnum text-ink"></label>
       </div>
       <p class="text-[12px] text-ink3 mt-2">Your log lives in this browser only. Copy it out before you switch phone or laptop.</p>
       <div class="flex flex-wrap gap-2 mt-3">
@@ -904,7 +914,8 @@ function writeSet(liftId, i, field, value){
 function refreshTrain(){ renderDayPicker(); renderPhase(); renderSession(); }
 
 $(function(){
-  S = load() || seed();
+  const stored = load();
+  S = (stored && !stored.sample) ? stored : blankState();
 
   /* Dark is not a preference here — the stylesheet has no other mode. */
   document.documentElement.setAttribute('data-theme', 'dark');
@@ -1020,55 +1031,13 @@ $(function(){
     if (!window.confirm('Erase every session you have logged? This cannot be undone.')) return;
     S = blankState(); save(); showTab('train'); toast('Cleared. Fresh start.');
   });
-  $('#clear-sample').on('click', function(){
-    S = blankState(); save(); showTab('train'); toast('Sample cleared — the log is yours now.');
-  });
 
   $('#rest-add').on('click', () => { restLeft += 30; restTotal = Math.max(restTotal, restLeft); paintRest(); });
   $('#rest-skip').on('click', stopRest);
 
-  $('#sample-banner').prop('hidden', !S.sample);
   showTab(S.ui.tab || 'train');
 });
 
-/* ═══════════════ Sample data ═══════════════
-   Three weeks of plausible history so the app opens as a working
-   log rather than an empty shell. One tap clears it.            */
-function seed(){
-  const s = blankState();
-  s.sample = true;
-  /* Anchor three weeks back, on a Monday, so weeks line up with the schedule. */
-  const start = new Date(); start.setDate(start.getDate() - 21);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  s.settings.startDate = start.toISOString().slice(0,10);
-  const iso = off => { const d = new Date(start); d.setDate(start.getDate() + off); return d.toISOString().slice(0,10); };
-
-  const base = { p1:22.5, p2:14, p3:12, p4:6, p5:10, u1:0, u2:35, u3:18, u4:5, u5:10, u6:10, l1:40, l2:40, l3:12, l4:50, l5:16 };
-  const DAY_OFFSET = { push:0, pull:1, legs:3 };   /* Mon · Tue · Thu, per the Guide */
-
-  [0,7,14].forEach((off, wk) => {
-    ['push','pull','legs'].forEach(day => {
-      const date = iso(off + DAY_OFFSET[day]);
-      const sess = { id: day + '-' + date, day, date, done:true, ex:{}, cardio:{} };
-      PROGRAM[day].lifts.forEach((l, idx) => {
-        const n  = wk < 2 ? 2 : l.sets;                       /* weeks 1–2 are two sets */
-        const kg = Math.round((base[l.id] + wk * l.inc) * 2) / 2;
-        /* In the newest week roughly half the lifts top out the rep range,
-           so the coach has something to say on both sides. */
-        const bump = (wk === 2 && idx % 2 === 0) ? 2 : 0;
-        sess.ex[l.id] = { m:false, sets: Array.from({ length:n }, (_,i) => ({
-          kg: l.noLoad ? 0 : kg,
-          reps: Math.min(l.hi, Math.max(l.lo, l.hi - i + bump))
-        })) };
-      });
-      s.sessions.push(sess);
-    });
-    s.sessions.push({ id:'cardio-' + iso(off + 5), day:'cardio', date: iso(off + 5), done:true, ex:{},
-                      cardio:{ type: wk === 1 ? 'Rower' : 'Incline walk', minutes: 28 + wk*2, km: 3.2 + wk*0.4, core: 3, intervals:false, notes:'' } });
-  });
-  s.ui.date = todayISO();
-  return s;
-}
 </script>
 
 </body>
