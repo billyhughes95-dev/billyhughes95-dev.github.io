@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A gym log that tells you what to lift today.">
+<meta name="theme-color" content="#f6f7f8">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+  :root{ color-scheme: light dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body{ margin:0; font-size:14px; }
+  img{ max-width:100%; }
+  [hidden]{ display:none !important; }
+</style>
+</head>
+<body>
+<title>MyWorkoutTracker</title>
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        ground:  'rgb(var(--ground) / <alpha-value>)',
+        surface: 'rgb(var(--surface) / <alpha-value>)',
+        raised:  'rgb(var(--raised) / <alpha-value>)',
+        line:    'rgb(var(--line) / <alpha-value>)',
+        ink:     'rgb(var(--ink) / <alpha-value>)',
+        ink2:    'rgb(var(--ink2) / <alpha-value>)',
+        ink3:    'rgb(var(--ink3) / <alpha-value>)',
+        accent:  'rgb(var(--accent) / <alpha-value>)',
+        push:    'rgb(var(--push) / <alpha-value>)',
+        pull:    'rgb(var(--pull) / <alpha-value>)',
+        legs:    'rgb(var(--legs) / <alpha-value>)',
+        cardio:  'rgb(var(--cardio) / <alpha-value>)'
+      },
+      screens: { xs: '380px' },
+      fontFamily: {
+        cond: ['"Barlow Condensed"','Haettenschweiler','"Arial Narrow"','sans-serif'],
+        sans: ['Barlow','ui-sans-serif','system-ui','sans-serif'],
+        mono: ['"IBM Plex Mono"','ui-monospace','SFMono-Regular','Menlo','monospace']
+      }
+    }
+  }
+}
+</script>
+
+<style>
+:root{
+  --ground: 246 247 248;  --surface: 255 255 255; --raised: 239 242 245;
+  --line: 224 229 235;    --ink: 22 24 28;        --ink2: 90 97 107;
+  --ink3: 139 147 158;
+  --push: 47 111 181;  --pull: 184 54 92;  --legs: 176 124 16;  --cardio: 46 139 107;
+  --accent: var(--push);
+  --plate-25:#D42A22; --plate-20:#1F58A6; --plate-15:#E8B500;
+  --plate-10:#1E8A4C; --plate-5:#D8D8D2;  --plate-2:#D42A22; --plate-1:#9AA3AD;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground: 17 19 23;   --surface: 25 28 33;  --raised: 33 37 44;
+    --line: 45 50 59;     --ink: 233 236 240;   --ink2: 155 163 174;
+    --ink3: 113 121 133;
+    --push: 74 131 196;  --pull: 209 88 122;  --legs: 192 138 32;  --cardio: 67 160 122;
+    --plate-5:#6E7681;
+  }
+}
+:root[data-theme="dark"]{
+  --ground: 17 19 23;   --surface: 25 28 33;  --raised: 33 37 44;
+  --line: 45 50 59;     --ink: 233 236 240;   --ink2: 155 163 174;
+  --ink3: 113 121 133;
+  --push: 74 131 196;  --pull: 209 88 122;  --legs: 192 138 32;  --cardio: 67 160 122;
+  --plate-5:#6E7681;
+}
+
+body{ background: rgb(var(--ground)); color: rgb(var(--ink)); font-family: Barlow, ui-sans-serif, system-ui, sans-serif; }
+html, body { height: 100%; }
+
+.eyebrow{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:rgb(var(--ink3)); }
+.tnum{ font-variant-numeric: tabular-nums; }
+
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+input[type=number]{ -moz-appearance:textfield; }
+
+:focus-visible{ outline:2px solid rgb(var(--accent)); outline-offset:2px; border-radius:4px; }
+
+.rail{ box-shadow: inset 3px 0 0 0 rgb(var(--accent)); }
+.card{ background:rgb(var(--surface)); border:1px solid rgb(var(--line)); }
+
+.plate{ border-radius:2px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
+
+.ring-track{ stroke: rgb(var(--line)); }
+.ring-fill{ stroke: rgb(var(--accent)); transition: stroke-dashoffset .95s linear; }
+@media (prefers-reduced-motion: reduce){ .ring-fill{ transition:none; } *{ animation-duration:.001ms !important; } }
+
+.tab-on{ color: rgb(var(--accent)); }
+.tab-on .tabdot{ opacity:1; }
+
+#tip{ pointer-events:none; }
+.sr-only{ position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+</style>
+
+<div id="app" class="min-h-full flex flex-col">
+
+  <!-- ── Top bar ─────────────────────────────────────────────── -->
+  <header class="sticky z-30 bg-ground/90 backdrop-blur border-b border-line"
+          style="top: env(safe-area-inset-top, 0px);">
+    <div class="mx-auto w-full max-w-5xl px-4 py-2.5 flex items-center gap-3">
+
+      <a href="#" id="brand" class="flex items-center gap-2.5 shrink-0" aria-label="MyWorkoutTracker — home">
+        <span id="logo-slot" class="block"></span>
+        <span class="leading-none hidden xs:block">
+          <span class="block font-cond font-bold text-[17px] tracking-tight text-ink">MYWORKOUT</span>
+          <span class="block font-mono text-[9px] tracking-[0.22em] text-accent -mt-0.5">TRACKER</span>
+        </span>
+      </a>
+
+      <nav id="tabs-top" class="ml-auto hidden md:flex items-center gap-1" role="tablist">
+        <button class="tab px-3 py-1.5 rounded-md font-cond font-semibold text-[15px] tracking-wide uppercase text-ink2 hover:text-ink hover:bg-raised transition-colors" data-tab="train" role="tab">Train</button>
+        <button class="tab px-3 py-1.5 rounded-md font-cond font-semibold text-[15px] tracking-wide uppercase text-ink2 hover:text-ink hover:bg-raised transition-colors" data-tab="progress" role="tab">Progress</button>
+        <button class="tab px-3 py-1.5 rounded-md font-cond font-semibold text-[15px] tracking-wide uppercase text-ink2 hover:text-ink hover:bg-raised transition-colors" data-tab="plan" role="tab">Plan</button>
+      </nav>
+
+      <div class="ml-auto md:ml-2 flex items-center gap-2">
+        <span id="week-pill" class="font-mono text-[11px] px-2 py-1 rounded-md bg-raised text-ink2 tnum whitespace-nowrap"></span>
+        <button id="theme-btn" class="w-8 h-8 grid place-items-center rounded-md text-ink2 hover:text-ink hover:bg-raised transition-colors" aria-label="Switch theme" title="Switch theme"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 mx-auto w-full max-w-5xl px-4 pb-32 md:pb-12" style="padding-block-start:1rem;">
+
+    <!-- ── TRAIN ───────────────────────────────────────────────── -->
+    <section id="view-train" role="tabpanel">
+
+      <div id="sample-banner" class="mb-4 card rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]" hidden>
+        <span class="w-1.5 h-1.5 rounded-full bg-accent shrink-0"></span>
+        <span class="text-ink2">Showing <strong class="text-ink font-semibold">three weeks of example data</strong> so you can see how it works.</span>
+        <button id="clear-sample" class="ml-auto font-semibold text-accent hover:underline">Start my own log &rarr;</button>
+      </div>
+
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <h1 class="font-cond font-bold text-2xl tracking-tight uppercase">Today&rsquo;s session</h1>
+        <input id="date" type="date" class="bg-surface border border-line rounded-md px-2 py-1 text-[13px] font-mono tnum text-ink2" aria-label="Session date">
+      </div>
+
+      <div id="day-picker" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" role="group" aria-label="Choose session"></div>
+
+      <div id="phase-note" class="mb-4 rounded-lg px-3.5 py-3 rail bg-surface border border-line border-l-0"></div>
+
+      <div id="session-body"></div>
+
+      <div id="session-foot" class="mt-5"></div>
+    </section>
+
+    <!-- ── PROGRESS ────────────────────────────────────────────── -->
+    <section id="view-progress" role="tabpanel" hidden>
+      <h1 class="font-cond font-bold text-2xl tracking-tight uppercase mb-3">Progress</h1>
+      <div id="stat-row" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-6"></div>
+
+      <div class="card rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <h2 class="font-cond font-semibold text-lg uppercase tracking-wide">Tonnage lifted per week</h2>
+          <button id="table-toggle" class="font-mono text-[10px] tracking-[0.12em] uppercase text-ink3 hover:text-ink underline underline-offset-2">Show table</button>
+        </div>
+        <p class="text-[12px] text-ink2 mb-3">Sets &times; reps &times; kilos, stacked by session. Pull-ups sit outside this &mdash; they&rsquo;re tracked in reps.</p>
+        <div id="legend" class="flex flex-wrap gap-x-4 gap-y-1 mb-2"></div>
+        <div id="vol-chart"></div>
+        <div id="vol-table" hidden class="mt-3 overflow-x-auto"></div>
+      </div>
+
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-1">Every lift, every week</h2>
+      <p class="text-[12px] text-ink2 mb-3">Top working set over time. The dot is where you are now.</p>
+      <div id="lift-list" class="grid gap-2.5 sm:grid-cols-2"></div>
+    </section>
+
+    <!-- ── PLAN ────────────────────────────────────────────────── -->
+    <section id="view-plan" role="tabpanel" hidden>
+      <h1 class="font-cond font-bold text-2xl tracking-tight uppercase mb-3">The plan</h1>
+      <div id="plan-body"></div>
+    </section>
+  </main>
+
+  <!-- ── Rest timer dock ─────────────────────────────────────── -->
+  <div id="rest" class="fixed left-0 right-0 z-40 px-4 md:bottom-4" hidden
+       style="bottom: calc(60px + env(safe-area-inset-bottom, 0px));">
+    <div class="mx-auto max-w-5xl">
+      <div class="ml-auto w-full sm:w-72 card rounded-xl shadow-lg px-3 py-2.5 flex items-center gap-3">
+        <svg viewBox="0 0 36 36" class="w-9 h-9 shrink-0 -rotate-90" aria-hidden="true">
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke-width="3" class="ring-track"></circle>
+          <circle id="ring" cx="18" cy="18" r="15.5" fill="none" stroke-width="3" stroke-linecap="round" class="ring-fill"></circle>
+        </svg>
+        <div class="min-w-0">
+          <div class="eyebrow">Rest</div>
+          <div id="rest-time" class="font-mono font-semibold text-lg tnum leading-none text-ink" aria-live="polite">2:00</div>
+        </div>
+        <div class="ml-auto flex items-center gap-1">
+          <button id="rest-add" class="px-2 py-1 rounded-md text-[12px] font-semibold text-ink2 hover:bg-raised hover:text-ink">+30s</button>
+          <button id="rest-skip" class="px-2 py-1 rounded-md text-[12px] font-semibold text-accent hover:bg-raised">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bottom tabs (mobile) ────────────────────────────────── -->
+  <nav id="tabs-bottom" class="md:hidden fixed left-0 right-0 bottom-0 z-40 bg-surface border-t border-line"
+       style="padding-bottom: env(safe-area-inset-bottom, 0px);" role="tablist">
+    <div class="grid grid-cols-3">
+      <button class="tab py-2.5 flex flex-col items-center gap-1 text-ink2" data-tab="train" role="tab">
+        <span class="font-cond font-semibold text-[13px] uppercase tracking-wide">Train</span>
+        <span class="tabdot w-6 h-0.5 rounded-full bg-accent opacity-0 transition-opacity"></span>
+      </button>
+      <button class="tab py-2.5 flex flex-col items-center gap-1 text-ink2" data-tab="progress" role="tab">
+        <span class="font-cond font-semibold text-[13px] uppercase tracking-wide">Progress</span>
+        <span class="tabdot w-6 h-0.5 rounded-full bg-accent opacity-0 transition-opacity"></span>
+      </button>
+      <button class="tab py-2.5 flex flex-col items-center gap-1 text-ink2" data-tab="plan" role="tab">
+        <span class="font-cond font-semibold text-[13px] uppercase tracking-wide">Plan</span>
+        <span class="tabdot w-6 h-0.5 rounded-full bg-accent opacity-0 transition-opacity"></span>
+      </button>
+    </div>
+  </nav>
+
+  <div id="tip" class="fixed z-50 hidden card rounded-md shadow-lg px-2.5 py-1.5 text-[12px] leading-snug"></div>
+  <div id="toast" class="fixed z-50 left-1/2 -translate-x-1/2 card rounded-lg shadow-lg px-4 py-2.5 text-[13px] font-semibold hidden"
+       style="bottom: calc(76px + env(safe-area-inset-bottom, 0px));" role="status"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   MyWorkoutTracker
+   Program data lifted straight from Gym_Tracker.xlsx
+   ═══════════════════════════════════════════════════════════════ */
+
+const PROGRAM = {
+  push: {
+    name: 'Push', token: 'push', sub: 'Chest · Shoulders · Triceps',
+    lifts: [
+      { id:'p1', name:'Dumbbell / barbell bench press',  target:'3 × 8–10',   sets:3, lo:8,  hi:10, swap:'Chest press machine',        kind:'barbell',  big:true,  inc:2.5 },
+      { id:'p2', name:'Incline dumbbell press',          target:'3 × 10–12',  sets:3, lo:10, hi:12, swap:'Incline press / Smith machine', kind:'dumbbell', big:true,  inc:2 },
+      { id:'p3', name:'Seated dumbbell shoulder press',  target:'3 × 8–10',   sets:3, lo:8,  hi:10, swap:'Shoulder press machine',     kind:'dumbbell', big:true,  inc:2 },
+      { id:'p4', name:'Dumbbell lateral raises',         target:'3 × 12–15',  sets:3, lo:12, hi:15, swap:'Cable / machine lateral raise', kind:'dumbbell', big:false, inc:1 },
+      { id:'p5', name:'Overhead DB triceps extension',   target:'3 × 10–12',  sets:3, lo:10, hi:12, swap:'Cable rope pushdown',        kind:'dumbbell', big:false, inc:1 }
+    ]
+  },
+  pull: {
+    name: 'Pull', token: 'pull', sub: 'Back · Rear delts · Biceps',
+    lifts: [
+      { id:'u1', name:'Pull-ups / chin-ups',          target:'3 × max',        sets:3, lo:5,  hi:10, swap:'Lat pulldown / assisted pull-up', kind:'bodyweight', big:true,  inc:2.5, noLoad:true },
+      { id:'u2', name:'Barbell bent-over row',        target:'3 × 8–10',       sets:3, lo:8,  hi:10, swap:'Seated cable row',            kind:'barbell',  big:true,  inc:2.5 },
+      { id:'u3', name:'Single-arm dumbbell row',      target:'3 × 10–12 each', sets:3, lo:10, hi:12, swap:'Chest-supported row machine', kind:'dumbbell', big:true,  inc:2 },
+      { id:'u4', name:'Dumbbell rear delt flyes',     target:'3 × 12–15',      sets:3, lo:12, hi:15, swap:'Reverse pec deck',            kind:'dumbbell', big:false, inc:1 },
+      { id:'u5', name:'Dumbbell curls',               target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Cable curl',                  kind:'dumbbell', big:false, inc:1 },
+      { id:'u6', name:'Hammer curls',                 target:'2 × 12',         sets:2, lo:12, hi:12, swap:'Cable rope curl',             kind:'dumbbell', big:false, inc:1 }
+    ]
+  },
+  legs: {
+    name: 'Legs', token: 'legs', sub: 'Quads · Hamstrings · Glutes · Calves',
+    lifts: [
+      { id:'l1', name:'Back squat / goblet squat',       target:'3 × 6–10',       sets:3, lo:6,  hi:10, swap:'Leg press / hack squat',   kind:'barbell',  big:true,  inc:2.5 },
+      { id:'l2', name:'Romanian deadlift',               target:'3 × 8–10',       sets:3, lo:8,  hi:10, swap:'Lying / seated leg curl',  kind:'barbell',  big:true,  inc:2.5 },
+      { id:'l3', name:'Bulgarian split squat / lunges',  target:'3 × 10 each leg',sets:3, lo:10, hi:10, swap:'Single-leg leg press',     kind:'dumbbell', big:true,  inc:2 },
+      { id:'l4', name:'Barbell hip thrust',              target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Glute drive machine',      kind:'barbell',  big:true,  inc:2.5 },
+      { id:'l5', name:'Standing DB calf raises',         target:'3 × 12–15',      sets:3, lo:12, hi:15, swap:'Calf raise machine',       kind:'dumbbell', big:false, inc:2 }
+    ]
+  },
+  cardio: {
+    name: 'Cardio', token: 'cardio', sub: 'Steady state + core', lifts: [],
+    plan: '25–35 min steady (incline walk, bike, rower), then 3 rounds of core: plank 30–45s, knee raises 10–12, woodchops 10 each side.'
+  }
+};
+const DAYS = ['push','pull','legs','cardio'];
+const LIFT_BY_ID = {};
+DAYS.forEach(d => (PROGRAM[d].lifts || []).forEach(l => { LIFT_BY_ID[l.id] = Object.assign({ day: d }, l); }));
+
+const GUIDE = {
+  howto: [
+    ['Log as you go',  'Type the weight and reps into each set as you finish it. Everything else — bests, gains, estimated max, charts — works itself out.'],
+    ['kg',             'The weight you used. For dumbbell lifts that means per dumbbell, not the pair.'],
+    ['M',              'Tap M when you used the machine alternative that day, so you know the weight isn’t comparable to the free-weight version.'],
+    ['Best kg',        'Your heaviest logged working set on that lift so far.'],
+    ['Gain kg',        'How much heavier that is than the very first session you logged.']
+  ],
+  schedule: {
+    4: [['Mon','Push'],['Tue','Pull'],['Thu','Legs'],['Sat','Cardio + core']],
+    3: [['Mon','Push'],['Wed','Pull'],['Fri','Legs']]
+  },
+  scheduleNote: { 4: 'Four days a week — a full rest day between each session.', 3: 'Three days a week — finish each session with 15–20 min of cardio.' },
+  phases: [
+    { weeks:'Weeks 1–2', title:'Ease back in',   body:'2 sets per exercise. Stop with 3–4 reps left in the tank. Form is the whole job right now.' },
+    { weeks:'Weeks 3–4', title:'Full volume',    body:'All 3 sets. Stop about 2 reps short of failure.' },
+    { weeks:'Week 5+',   title:'Add weight',     body:'When you hit the top of the rep range on every set, put a little more on the bar next time.' }
+  ],
+  tips: [
+    ['Warm-up',  '5 min bike or treadmill, then a couple of light sets before your first big lift.'],
+    ['Rest',     '2–3 min on the big lifts — bench, squat, rows, RDL. 60–90 sec on everything else. The timer below does this for you.'],
+    ['Soreness', 'Expect it for the first week or two. It’s normal, and it eases off fast.']
+  ]
+};
+
+const CARDIO_TYPES = ['Incline walk','Bike','Rower','Treadmill run','Cross-trainer','Swim'];
+
+/* ── Logo ──────────────────────────────────────────────────────
+   Three bars rising off a loaded barbell: the gym at the base,
+   progress growing out of it. Built to stay legible at 18px.     */
+function logoMark(px, cls){
+  return `<svg viewBox="0 0 32 32" width="${px}" height="${px}" class="${cls||''}" role="img" aria-label="MyWorkoutTracker">
+    <g fill="rgb(var(--accent))">
+      <rect x="6"    y="17.5" width="5" height="7"  rx="1.4" opacity="0.45"/>
+      <rect x="13.5" y="12"   width="5" height="12.5" rx="1.4" opacity="0.7"/>
+      <rect x="21"   y="5.5"  width="5" height="19" rx="1.4"/>
+    </g>
+    <g fill="rgb(var(--ink))">
+      <rect x="4" y="25" width="24" height="3" rx="1.5"/>
+      <rect x="0.5" y="21.5" width="3.6" height="10" rx="1.2"/>
+      <rect x="27.9" y="21.5" width="3.6" height="10" rx="1.2"/>
+    </g>
+  </svg>`;
+}
+</script>
+
+<script>
+/* ═══════════════ State & storage ═══════════════ */
+const KEY = 'mywt.v1';
+const DAY_MS = 86400000;
+let S = null;
+
+const todayISO = () => new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const parseISO = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const fmtDate  = s => parseISO(s).toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short' });
+
+function blankState(){
+  return {
+    v: 1,
+    sample: false,
+    settings: { startDate: todayISO(), daysPerWeek: 4, barWeight: 20, theme: 'system' },
+    sessions: [],
+    ui: { tab: 'train', day: 'push', date: todayISO() }
+  };
+}
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const p = JSON.parse(raw); if (p && p.v === 1) return p; }
+  } catch(e){}
+  return null;
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+}
+
+/* Week 1 is the week containing the program start date. */
+function weekOf(dateISO){
+  const start = parseISO(S.settings.startDate), d = parseISO(dateISO);
+  const startMonday = new Date(start); startMonday.setDate(start.getDate() - ((start.getDay()+6)%7));
+  return Math.max(1, Math.floor((d - startMonday) / (7*DAY_MS)) + 1);
+}
+function phaseOf(week){
+  if (week <= 2) return { i:0, label:'Easing back in',  rir:'Stop with 3–4 reps left in the tank.', sets:2, progress:false };
+  if (week <= 4) return { i:1, label:'Full volume',     rir:'Stop about 2 reps short of failure.',  sets:null, progress:true };
+  return           { i:2, label:'Progressing',          rir:'Stop 1–2 reps short. Earn the next jump.', sets:null, progress:true };
+}
+
+function getSession(day, date, create){
+  let s = S.sessions.find(x => x.day === day && x.date === date);
+  if (!s && create){
+    s = { id: day + '-' + date, day, date, done:false, ex:{}, cardio:{} };
+    S.sessions.push(s);
+  }
+  return s;
+}
+/* Every logged session for a lift, oldest first, only those with real sets. */
+function historyFor(liftId){
+  const day = LIFT_BY_ID[liftId].day;
+  return S.sessions
+    .filter(s => s.day === day && s.ex[liftId] && s.ex[liftId].sets.some(t => t.reps > 0))
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(s => {
+      const e = s.ex[liftId];
+      const live = e.sets.filter(t => t.reps > 0);
+      const top  = live.reduce((best,t) => (t.kg||0) > (best.kg||0) ? t : best, live[0]);
+      return { date:s.date, week:weekOf(s.date), machine:!!e.m, sets:live, top,
+               volume: live.reduce((n,t) => n + (t.kg||0)*(t.reps||0), 0),
+               reps:   live.reduce((n,t) => n + (t.reps||0), 0) };
+    });
+}
+const e1rm = (kg, reps) => (kg && reps) ? kg * (1 + reps/30) : 0;
+
+function statsFor(liftId){
+  const h = historyFor(liftId).filter(x => !x.machine);
+  if (!h.length) return null;
+  if (LIFT_BY_ID[liftId].noLoad){
+    const per = h.map(x => Math.max(...x.sets.map(t => t.reps || 0)));
+    const best = Math.max(...per);
+    return { unit:'reps', best, gain: best - per[0], e1rm:0, sessions:h.length, series:per, hist:h };
+  }
+  const best  = h.reduce((m,x) => Math.max(m, x.top.kg||0), 0);
+  const first = h[0].top.kg || 0;
+  const e1    = h.reduce((m,x) => Math.max(m, ...x.sets.map(t => e1rm(t.kg, t.reps))), 0);
+  return { unit:'kg', best, gain: best - first, e1rm: e1, sessions: h.length, series: h.map(x => x.top.kg || 0), hist: h };
+}
+
+/* ── The coach ───────────────────────────────────────────────
+   Reads your last session on this lift and the Guide's rules,
+   then says what to put on the bar today.                      */
+function coach(lift, week){
+  const ph = phaseOf(week);
+  const h  = historyFor(lift.id).filter(x => !x.machine);
+  const prev = h.filter(x => x.date < S.ui.date).pop();
+
+  if (!prev){
+    return { kg:null, verdict:'first',
+             line: lift.noLoad
+               ? `First time logged. Do what you can with clean form — ${ph.rir.toLowerCase()}`
+               : `First time logged. Pick a weight you can control for ${lift.hi} reps, then ${ph.rir.toLowerCase()}` };
+  }
+  const prevKg   = prev.top.kg || 0;
+  const repsList = prev.sets.map(t => t.reps).join(', ');
+  const allTop   = prev.sets.length >= 2 && prev.sets.every(t => t.reps >= lift.hi);
+  const allLow   = prev.sets.every(t => t.reps < lift.lo);
+
+  if (lift.noLoad){
+    const bestReps = Math.max(...prev.sets.map(t => t.reps));
+    return { kg: prevKg || null, verdict: allTop ? 'up' : 'hold',
+             line: `Last time: ${repsList}. ${bestReps >= lift.hi ? 'Strong — add a little weight in a belt or dip belt if the gym has one.' : 'Chase one more rep on your first set.'}` };
+  }
+  if (allTop && ph.progress){
+    return { kg: prevKg + lift.inc, verdict:'up',
+             line: `You hit ${lift.hi}+ on every set at ${fmtKg(prevKg)} kg. Go up to ${fmtKg(prevKg + lift.inc)} kg.` };
+  }
+  if (allTop && !ph.progress){
+    return { kg: prevKg, verdict:'hold',
+             line: `You had ${repsList} at ${fmtKg(prevKg)} kg — comfortably in range. Hold here while you're easing back in; weight goes up from week 3.` };
+  }
+  if (allLow){
+    return { kg: Math.max(0, prevKg - lift.inc), verdict:'down',
+             line: `Last time: ${repsList} — under ${lift.lo}. Drop to ${fmtKg(Math.max(0, prevKg - lift.inc))} kg and own the reps.` };
+  }
+  return { kg: prevKg, verdict:'hold',
+           line: `Last time: ${repsList} at ${fmtKg(prevKg)} kg. Same weight — get all sets to ${lift.hi}.` };
+}
+
+const fmtKg = n => (Math.round(n*100)/100).toString().replace(/\.0+$/,'');
+
+/* ── Plate maths ────────────────────────────────────────────
+   Standard calibrated plate colours, heaviest first.          */
+const PLATES = [
+  { kg:25,   c:'var(--plate-25)', h:34, w:7 },
+  { kg:20,   c:'var(--plate-20)', h:32, w:7 },
+  { kg:15,   c:'var(--plate-15)', h:29, w:6 },
+  { kg:10,   c:'var(--plate-10)', h:25, w:6 },
+  { kg:5,    c:'var(--plate-5)',  h:20, w:5 },
+  { kg:2.5,  c:'var(--plate-2)',  h:16, w:5 },
+  { kg:1.25, c:'var(--plate-1)',  h:13, w:4 }
+];
+function plateSplit(total, bar){
+  if (total <= bar) return { ok: total === bar, side: [], left: total - bar };
+  let per = (total - bar) / 2, side = [];
+  for (const p of PLATES){
+    while (per >= p.kg - 0.001){ side.push(p); per -= p.kg; }
+  }
+  return { ok: per < 0.01, side, left: per };
+}
+</script>
+
+<script>
+/* ═══════════════ Charts ═══════════════ */
+function sparkline(vals, w, h){
+  w = w || 132; h = h || 34;
+  if (!vals || vals.length < 2){
+    return `<svg viewBox="0 0 ${w} ${h}" class="w-full h-auto" aria-hidden="true">
+      <line x1="4" y1="${h-6}" x2="${w-4}" y2="${h-6}" stroke="rgb(var(--line))" stroke-width="2" stroke-linecap="round"/></svg>`;
+  }
+  const pad = 6, min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  const X = i => pad + i * (w - 2*pad) / (vals.length - 1);
+  const Y = v => (h - pad) - ((v - min) / span) * (h - 2*pad);
+  const pts  = vals.map((v,i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const area = `${pad},${h-pad} ${pts} ${X(vals.length-1).toFixed(1)},${h-pad}`;
+  const lx = X(vals.length-1).toFixed(1), ly = Y(vals[vals.length-1]).toFixed(1);
+  return `<svg viewBox="0 0 ${w} ${h}" class="w-full h-auto" role="img" aria-label="Top set over ${vals.length} sessions, ${fmtKg(min)} to ${fmtKg(max)} kg">
+    <polygon points="${area}" fill="rgb(var(--accent))" fill-opacity="0.1"/>
+    <polyline points="${pts}" fill="none" stroke="rgb(var(--accent))" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${lx}" cy="${ly}" r="3.4" fill="rgb(var(--accent))" stroke="rgb(var(--surface))" stroke-width="2"/>
+  </svg>`;
+}
+
+function volumeChart(){
+  const series = ['push','pull','legs'];
+  const maxWeek = Math.max(6, ...S.sessions.map(s => weekOf(s.date)));
+  const weeks = [];
+  for (let w = 1; w <= Math.min(maxWeek, 12); w++){
+    const row = { w, total:0 };
+    series.forEach(d => {
+      row[d] = S.sessions
+        .filter(s => s.day === d && weekOf(s.date) === w)
+        .reduce((n,s) => n + Object.entries(s.ex).reduce((m,[id,e]) =>
+            LIFT_BY_ID[id] && LIFT_BY_ID[id].noLoad ? m
+            : m + e.sets.reduce((k,t) => k + (t.kg||0)*(t.reps||0), 0), 0), 0);
+      row.total += row[d];
+    });
+    weeks.push(row);
+  }
+  const W = 620, H = 210, L = 46, R = 8, T = 10, B = 26;
+  const peak = Math.max(1000, ...weeks.map(r => r.total));
+  const nice = Math.ceil(peak / 1000) * 1000;
+  const bw = Math.min(38, (W - L - R) / weeks.length * 0.62);
+  const X  = i => L + (i + 0.5) * (W - L - R) / weeks.length;
+  const Y  = v => (H - B) - (v / nice) * (H - B - T);
+
+  let g = '';
+  for (let i = 0; i <= 3; i++){
+    const v = nice * i / 3, y = Y(v);
+    g += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${W-R}" y2="${y.toFixed(1)}" stroke="rgb(var(--line))" stroke-width="1"/>
+          <text x="${L-8}" y="${(y+4).toFixed(1)}" text-anchor="end" fill="rgb(var(--ink3))" font-size="11" font-family="'IBM Plex Mono',monospace">${v >= 1000 ? (v/1000)+'k' : v}</text>`;
+  }
+  let bars = '';
+  weeks.forEach((r,i) => {
+    let y = H - B;
+    const stack = series.filter(d => r[d] > 0);
+    stack.forEach((d,k) => {
+      const hgt = Math.max(2, (r[d] / nice) * (H - B - T));
+      const top = k === stack.length - 1;
+      y -= hgt;
+      bars += `<rect class="vbar" x="${(X(i)-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(hgt - (k ? 2 : 0)).toFixed(1)}"
+                 rx="${top ? 4 : 0}" fill="rgb(var(--${d}))"
+                 data-tip="Week ${r.w} · ${PROGRAM[d].name} · ${Math.round(r[d]).toLocaleString()} kg"></rect>`;
+    });
+    bars += `<text x="${X(i).toFixed(1)}" y="${H-8}" text-anchor="middle" fill="rgb(var(--ink3))" font-size="11" font-family="'IBM Plex Mono',monospace">W${r.w}</text>`;
+  });
+  $('#vol-chart').html(`<svg viewBox="0 0 ${W} ${H}" class="w-full h-auto" role="img"
+      aria-label="Weekly tonnage, stacked by session type. Full numbers in the table below.">${g}${bars}
+      <line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="rgb(var(--line))" stroke-width="1.5"/></svg>`);
+
+  $('#legend').html(series.map(d =>
+    `<span class="inline-flex items-center gap-1.5 text-[12px] text-ink2">
+       <span class="w-2.5 h-2.5 rounded-sm" style="background:rgb(var(--${d}))"></span>${PROGRAM[d].name}</span>`).join(''));
+
+  $('#vol-table').html(`<table class="w-full text-[12px] tnum border-collapse">
+    <caption class="sr-only">Tonnage lifted per week by session type, in kilograms</caption>
+    <thead><tr class="text-left text-ink3">
+      <th class="py-1.5 pr-3 font-semibold">Week</th>${series.map(d => `<th class="py-1.5 pr-3 font-semibold">${PROGRAM[d].name}</th>`).join('')}<th class="py-1.5 font-semibold">Total</th>
+    </tr></thead><tbody>${weeks.map(r => `<tr class="border-t border-line">
+      <td class="py-1.5 pr-3 text-ink2">W${r.w}</td>${series.map(d => `<td class="py-1.5 pr-3">${Math.round(r[d]).toLocaleString()}</td>`).join('')}
+      <td class="py-1.5 font-semibold">${Math.round(r.total).toLocaleString()}</td></tr>`).join('')}</tbody></table>`);
+}
+</script>
+
+<script>
+/* ═══════════════ Train view ═══════════════ */
+function renderDayPicker(){
+  $('#day-picker').html(DAYS.map(d => {
+    const p = PROGRAM[d], on = S.ui.day === d;
+    const logged = !!getSession(d, S.ui.date, false);
+    return `<button class="day-btn group text-left rounded-lg px-3 py-2.5 border transition-colors ${
+        on ? 'border-transparent text-white' : 'bg-surface border-line hover:border-ink3'}"
+        ${on ? `style="background:rgb(var(--${d}))"` : ''} data-day="${d}" role="button" aria-pressed="${on}">
+      <span class="flex items-center gap-1.5">
+        <span class="font-cond font-bold text-lg uppercase tracking-wide leading-none ${on ? '' : 'text-ink'}">${p.name}</span>
+        ${logged ? `<span class="w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : ''}" ${on ? '' : `style="background:rgb(var(--${d}))"`} title="Logged"></span>` : ''}
+      </span>
+      <span class="block text-[11px] mt-0.5 leading-tight ${on ? 'text-white/80' : 'text-ink3'}">${p.sub}</span>
+    </button>`;
+  }).join(''));
+}
+
+function renderPhase(){
+  const wk = weekOf(S.ui.date), ph = phaseOf(wk);
+  const done = S.sessions.filter(s => weekOf(s.date) === wk).length;
+  $('#week-pill').text(`WK ${wk} / 12`);
+  $('#phase-note').html(`
+    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span class="font-cond font-bold text-lg uppercase tracking-wide">Week ${wk} &middot; ${ph.label}</span>
+      <span class="font-mono text-[11px] text-ink3 tnum">${done} of ${S.settings.daysPerWeek} sessions this week</span>
+    </div>
+    <p class="text-[13px] text-ink2 mt-0.5">${ph.rir}${ph.sets ? ` Two working sets per exercise while you settle in.` : ''}</p>`);
+}
+
+function tickHTML(done){
+  return `<span class="tick ml-auto shrink-0 grid place-items-center w-5 h-5 rounded-full transition-colors ${
+      done ? 'bg-cardio text-white' : 'border border-line text-transparent'}"
+      role="img" aria-label="${done ? 'Set logged' : 'Set not logged yet'}">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5"
+      stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+}
+
+function plateStrip(lift, kg){
+  if (lift.noLoad) return `<span class="text-[12px] text-ink3">Bodyweight &mdash; log any added weight in the kg box.</span>`;
+  if (lift.kind === 'dumbbell') return `<span class="text-[12px] text-ink3">Per dumbbell &mdash; grab a pair of <strong class="text-ink2 font-semibold tnum">${fmtKg(kg)} kg</strong>.</span>`;
+  const bar = S.settings.barWeight, sp = plateSplit(kg, bar);
+  if (!sp.side.length) return `<span class="text-[12px] text-ink3">Empty ${bar} kg bar.</span>`;
+  const discs = sp.side.map(p => `<span class="plate inline-block align-middle" style="width:${p.w}px;height:${p.h}px;background:${p.c}" title="${p.kg} kg"></span>`).join('');
+  const counts = {};
+  sp.side.forEach(p => counts[p.kg] = (counts[p.kg]||0) + 1);
+  const words = Object.entries(counts).sort((a,b)=>b[0]-a[0]).map(([k,n]) => `${n}&times;${k}`).join(' + ');
+  return `<span class="flex items-center gap-2 flex-wrap">
+      <span class="flex items-center gap-[2px] h-9">${discs}<span class="inline-block align-middle bg-ink3 rounded-sm" style="width:22px;height:4px"></span></span>
+      <span class="font-mono text-[11px] text-ink2 tnum">${words} per side${sp.ok ? '' : ` <span class="text-ink3">(+${fmtKg(sp.left*2)} kg short)</span>`}</span>
+    </span>`;
+}
+
+function renderSession(){
+  const day = S.ui.day, p = PROGRAM[day], wk = weekOf(S.ui.date), ph = phaseOf(wk);
+  document.getElementById('view-train').style.setProperty('--accent', `var(--${day})`);
+  document.getElementById('rest').style.setProperty('--accent', `var(--${day})`);
+
+  if (day === 'cardio') return renderCardio();
+
+  const sess = getSession(day, S.ui.date, false);
+  const nSets = ph.sets ? Math.min(ph.sets, 3) : null;
+
+  $('#session-body').html(p.lifts.map(lift => {
+    const e = (sess && sess.ex[lift.id]) || { m:false, sets:[] };
+    const c = coach(lift, wk);
+    const setCount = nSets ? Math.min(nSets, lift.sets) : lift.sets;
+    const st = statsFor(lift.id);
+    const vcol = { up:'text-cardio', down:'text-pull', hold:'text-ink2', first:'text-ink2' }[c.verdict];
+
+    const rows = Array.from({ length:setCount }, (_,i) => {
+      const t = e.sets[i] || {};
+      const kg = t.kg != null ? t.kg : '';
+      const reps = t.reps != null ? t.reps : '';
+      const doneSet = t.reps > 0;
+      return `<div class="flex items-center gap-2 py-1.5 ${i ? 'border-t border-line' : ''}" data-row="${lift.id}-${i}">
+        <span class="eyebrow w-9 shrink-0">Set ${i+1}</span>
+        <div class="flex items-center rounded-md border border-line overflow-hidden bg-ground">
+          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Less weight">&minus;</button>
+          <input class="inp w-14 h-8 bg-transparent text-center font-mono text-[13px] tnum text-ink" type="number" inputmode="decimal" step="${lift.inc}" min="0"
+                 value="${kg}" placeholder="${c.kg != null ? fmtKg(c.kg) : '–'}" data-f="kg" data-i="${i}" data-id="${lift.id}" aria-label="Set ${i+1} weight in kg">
+          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="kg" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More weight">+</button>
+        </div>
+        <span class="eyebrow -ml-1">kg</span>
+        <div class="flex items-center rounded-md border border-line overflow-hidden bg-ground">
+          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="-1" data-i="${i}" data-id="${lift.id}" aria-label="Fewer reps">&minus;</button>
+          <input class="inp w-11 h-8 bg-transparent text-center font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" step="1" min="0"
+                 value="${reps}" placeholder="${lift.hi}" data-f="reps" data-i="${i}" data-id="${lift.id}" aria-label="Set ${i+1} reps">
+          <button class="step w-7 h-8 text-ink3 hover:text-ink hover:bg-raised" data-f="reps" data-d="1" data-i="${i}" data-id="${lift.id}" aria-label="More reps">+</button>
+        </div>
+        <span class="eyebrow -ml-1">reps</span>
+        ${tickHTML(doneSet)}
+      </div>`;
+    }).join('');
+
+    return `<article class="card rounded-lg mb-2.5 rail border-l-0 overflow-hidden" data-lift="${lift.id}">
+      <div class="px-3.5 pt-3 pb-2.5">
+        <div class="flex items-start gap-2">
+          <div class="min-w-0">
+            <h3 class="font-cond font-bold text-[19px] leading-tight uppercase tracking-tight">${lift.name}</h3>
+            <p class="text-[12px] text-ink3 mt-0.5">${lift.target}${lift.kind === 'dumbbell' ? ' · per dumbbell' : ''}</p>
+          </div>
+          <button class="mswap ml-auto shrink-0 px-2 py-1 rounded-md border text-[11px] font-mono tracking-wide transition-colors ${
+            e.m ? 'border-transparent bg-accent text-white' : 'border-line text-ink3 hover:text-ink hover:border-ink3'}"
+            data-id="${lift.id}" aria-pressed="${!!e.m}" title="${lift.swap}">M</button>
+        </div>
+        ${e.m ? `<p class="mt-2 text-[12px] text-ink2 bg-raised rounded-md px-2 py-1.5">On the <strong class="font-semibold text-ink">${lift.swap}</strong> — weights won’t match the free-weight version, so it sits outside your bests.</p>` : ''}
+        <p class="mt-2 text-[13px] leading-snug ${vcol}"><span class="font-semibold">${ { up:'Go up.', down:'Back off.', hold:'Hold.', first:'Set a baseline.' }[c.verdict] }</span> <span class="text-ink2">${c.line}</span></p>
+        ${!e.m ? `<div class="mt-2">${plateStrip(lift, c.kg != null ? c.kg : 0)}</div>` : ''}
+      </div>
+      <div class="px-3.5 pb-1 border-t border-line">${rows}</div>
+      <div class="px-3.5 py-2 bg-raised/60 border-t border-line flex items-center gap-3">
+        <div class="flex gap-3.5 font-mono text-[11px] tnum text-ink2">
+          <span>best <strong class="text-ink font-semibold">${st ? fmtKg(st.best) : '–'}</strong> ${st ? st.unit : 'kg'}</span>
+          <span>gain <strong class="${st && st.gain > 0 ? 'text-cardio' : 'text-ink'} font-semibold">${st ? (st.gain > 0 ? '+' : '') + fmtKg(st.gain) : '–'}</strong> ${st ? st.unit : 'kg'}</span>
+          ${!st || st.unit === 'kg' ? `<span class="hidden sm:inline">e1RM <strong class="text-ink font-semibold">${st ? Math.round(st.e1rm) : '–'}</strong> kg</span>` : ''}
+        </div>
+        <div class="ml-auto w-24 shrink-0">${sparkline(st ? st.series : [])}</div>
+      </div>
+    </article>`;
+  }).join(''));
+
+  renderFoot(sess);
+}
+
+function renderFoot(sess){
+  const live = sess ? Object.values(sess.ex).reduce((n,e) => n + e.sets.filter(t => t.reps > 0).length, 0) : 0;
+  const vol  = sess ? Object.entries(sess.ex).reduce((n,[id,e]) =>
+      LIFT_BY_ID[id] && LIFT_BY_ID[id].noLoad ? n : n + e.sets.reduce((k,t) => k + (t.kg||0)*(t.reps||0), 0), 0) : 0;
+  $('#session-foot').html(`<div class="card rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div><div class="eyebrow">Sets logged</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${live}</div></div>
+      <div><div class="eyebrow">Tonnage</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${Math.round(vol).toLocaleString()} <span class="text-[12px] text-ink3 font-normal">kg</span></div></div>
+      <button id="finish" class="ml-auto px-4 py-2 rounded-lg font-cond font-bold text-[15px] uppercase tracking-wide text-white disabled:opacity-40 transition-opacity"
+        style="background:rgb(var(--accent))" ${live ? '' : 'disabled'}>${sess && sess.done ? 'Session logged ✓' : 'Finish session'}</button>
+    </div>`);
+}
+
+function renderCardio(){
+  const sess = getSession('cardio', S.ui.date, false);
+  const c = (sess && sess.cardio) || {};
+  const f = (k, v) => c[k] != null ? c[k] : v;
+  $('#session-body').html(`
+    <article class="card rounded-lg rail border-l-0 overflow-hidden mb-2.5">
+      <div class="px-3.5 pt-3 pb-3">
+        <h3 class="font-cond font-bold text-[19px] uppercase tracking-tight leading-tight">Steady state + core</h3>
+        <p class="text-[13px] text-ink2 mt-1 leading-snug">${PROGRAM.cardio.plan}</p>
+      </div>
+      <div class="px-3.5 pb-3.5 border-t border-line pt-3 grid gap-3 sm:grid-cols-2">
+        <label class="block"><span class="eyebrow block mb-1">Type</span>
+          <select class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[13px] text-ink" data-k="type">
+            <option value="">Choose…</option>${CARDIO_TYPES.map(t => `<option ${f('type','')===t?'selected':''}>${t}</option>`).join('')}</select></label>
+        <label class="block"><span class="eyebrow block mb-1">Minutes</span>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" min="0" placeholder="30" value="${f('minutes','')}" data-k="minutes"></label>
+        <label class="block"><span class="eyebrow block mb-1">Distance (km)</span>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="decimal" step="0.1" min="0" placeholder="4.0" value="${f('km','')}" data-k="km"></label>
+        <label class="block"><span class="eyebrow block mb-1">Core rounds</span>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink" type="number" inputmode="numeric" min="0" max="10" placeholder="3" value="${f('core','')}" data-k="core"></label>
+        <label class="flex items-center gap-2 sm:col-span-2 text-[13px] text-ink2">
+          <input class="cf w-4 h-4 accent-cardio" type="checkbox" ${f('intervals',false)?'checked':''} data-k="intervals"> Intervals rather than steady state</label>
+        <label class="block sm:col-span-2"><span class="eyebrow block mb-1">Notes</span>
+          <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[13px] text-ink" type="text" placeholder="How did it feel?" value="${(f('notes','')+'').replace(/"/g,'&quot;')}" data-k="notes"></label>
+      </div>
+    </article>`);
+
+  const mins = S.sessions.filter(s => s.day === 'cardio').reduce((n,s) => n + (+(s.cardio && s.cardio.minutes) || 0), 0);
+  const cnt  = S.sessions.filter(s => s.day === 'cardio' && s.cardio && s.cardio.minutes).length;
+  $('#session-foot').html(`<div class="card rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div><div class="eyebrow">Cardio sessions</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${cnt}</div></div>
+      <div><div class="eyebrow">Total minutes</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${mins}</div></div>
+    </div>`);
+}
+</script>
+
+<script>
+/* ═══════════════ Progress view ═══════════════ */
+function renderProgress(){
+  document.getElementById('view-progress').style.setProperty('--accent', 'var(--push)');
+  const logged = S.sessions.filter(s => Object.values(s.ex).some(e => e.sets.some(t => t.reps > 0)) || (s.cardio && s.cardio.minutes));
+  const tonnage = S.sessions.reduce((n,s) => n + Object.entries(s.ex).reduce((m,[id,e]) =>
+      LIFT_BY_ID[id] && LIFT_BY_ID[id].noLoad ? m : m + e.sets.reduce((k,t) => k + (t.kg||0)*(t.reps||0), 0), 0), 0);
+  const weeksHit = [...new Set(logged.map(s => weekOf(s.date)))].sort((a,b) => a-b);
+  let streak = 0;
+  for (let i = weeksHit.length - 1; i > 0; i--){ if (weeksHit[i] - weeksHit[i-1] === 1) streak++; else break; }
+  if (weeksHit.length) streak++;
+  const gains = Object.keys(LIFT_BY_ID).map(id => statsFor(id)).filter(g => g && g.unit === 'kg');
+  const totalGain = gains.reduce((n,g) => n + Math.max(0, g.gain), 0);
+
+  const tile = (label, value, unit, note) => `<div class="card rounded-lg px-3.5 py-3">
+      <div class="eyebrow">${label}</div>
+      <div class="font-mono font-semibold text-2xl tnum leading-none mt-1.5">${value}<span class="text-[13px] text-ink3 font-normal ml-0.5">${unit||''}</span></div>
+      <div class="text-[11px] text-ink3 mt-1 leading-tight">${note}</div></div>`;
+
+  $('#stat-row').html(
+    tile('Sessions', logged.length, '', 'logged since you started') +
+    tile('Week streak', streak, '', streak > 1 ? 'weeks in a row with a session' : 'keep it going') +
+    tile('Tonnage', Math.round(tonnage).toLocaleString(), 'kg', 'total weight moved') +
+    tile('Added to the bar', '+' + fmtKg(Math.round(totalGain*10)/10), 'kg', 'across every lift combined'));
+
+  volumeChart();
+
+  const cards = DAYS.filter(d => d !== 'cardio').map(d => PROGRAM[d].lifts.map(lift => {
+    const st = statsFor(lift.id);
+    return `<div class="card rounded-lg px-3.5 py-3" style="--accent: var(--${d})">
+      <div class="flex items-start gap-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-sm shrink-0" style="background:rgb(var(--${d}))"></span>
+            <span class="eyebrow">${PROGRAM[d].name}</span>
+          </div>
+          <h3 class="font-cond font-semibold text-[16px] uppercase tracking-tight leading-tight mt-0.5">${lift.name}</h3>
+        </div>
+        <div class="ml-auto w-24 shrink-0">${sparkline(st ? st.series : [])}</div>
+      </div>
+      <div class="flex gap-4 mt-2 font-mono text-[11px] tnum text-ink2">
+        <span>best <strong class="text-ink font-semibold">${st ? fmtKg(st.best) : '–'}</strong> ${st ? st.unit : 'kg'}</span>
+        <span>gain <strong class="${st && st.gain > 0 ? 'text-cardio' : 'text-ink'} font-semibold">${st ? (st.gain > 0 ? '+' : '') + fmtKg(st.gain) : '–'}</strong> ${st ? st.unit : 'kg'}</span>
+        ${!st || st.unit === 'kg' ? `<span>e1RM <strong class="text-ink font-semibold">${st ? Math.round(st.e1rm) : '–'}</strong> kg</span>` : ''}
+        <span class="ml-auto text-ink3">${st ? st.sessions + '×' : 'no data'}</span>
+      </div></div>`;
+  }).join('')).join('');
+  $('#lift-list').html(cards);
+}
+
+/* ═══════════════ Plan view ═══════════════ */
+function renderPlan(){
+  document.getElementById('view-plan').style.setProperty('--accent', 'var(--push)');
+  const d = S.settings.daysPerWeek;
+  const wk = weekOf(S.ui.date), ph = phaseOf(wk);
+
+  $('#plan-body').html(`
+    <div class="card rounded-lg p-4 mb-3">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-1">Weekly schedule</h2>
+      <div class="inline-flex rounded-md border border-line overflow-hidden mb-3">
+        ${[4,3].map(n => `<button class="dpw px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+          d === n ? 'bg-accent text-white' : 'text-ink2 hover:bg-raised'}" data-n="${n}">${n} days</button>`).join('')}
+      </div>
+      <p class="text-[13px] text-ink2 mb-3">${GUIDE.scheduleNote[d]}</p>
+      <div class="grid gap-1.5" style="grid-template-columns:auto 1fr">
+        ${GUIDE.schedule[d].map(([day,what]) => {
+          const tok = what.toLowerCase().startsWith('cardio') ? 'cardio' : what.toLowerCase();
+          return `<div class="font-mono text-[12px] text-ink3 py-1">${day}</div>
+                  <div class="flex items-center gap-2 py-1">
+                    <span class="w-2 h-2 rounded-sm shrink-0" style="background:rgb(var(--${tok}))"></span>
+                    <span class="font-cond font-semibold text-[15px] uppercase tracking-wide">${what}</span>
+                  </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="card rounded-lg p-4 mb-3">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-2">Easing back in</h2>
+      <ol class="grid gap-2">${GUIDE.phases.map((p,i) => `
+        <li class="flex gap-3 rounded-md px-3 py-2.5 ${i === ph.i ? 'bg-raised rail border-l-0' : ''}">
+          <span class="font-mono text-[11px] text-ink3 w-[72px] shrink-0 pt-0.5">${p.weeks}</span>
+          <span><span class="font-cond font-semibold text-[16px] uppercase tracking-wide block leading-tight ${i === ph.i ? 'text-accent' : ''}">${p.title}${i === ph.i ? ' — you are here' : ''}</span>
+          <span class="text-[13px] text-ink2 leading-snug">${p.body}</span></span>
+        </li>`).join('')}</ol>
+    </div>
+
+    <div class="card rounded-lg p-4 mb-3">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-2">How to use it</h2>
+      <dl class="grid gap-2" style="grid-template-columns:auto 1fr">
+        ${GUIDE.howto.concat(GUIDE.tips).map(([k,v]) => `
+          <dt class="font-mono text-[11px] text-ink3 pt-1 whitespace-nowrap">${k}</dt>
+          <dd class="text-[13px] text-ink2 leading-snug pt-0.5">${v}</dd>`).join('')}
+      </dl>
+    </div>
+
+    <div class="card rounded-lg p-4 mb-3">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-3">Settings</h2>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="block"><span class="eyebrow block mb-1">Program start date</span>
+          <input id="set-start" type="date" value="${S.settings.startDate}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink"></label>
+        <label class="block"><span class="eyebrow block mb-1">Barbell weight (kg)</span>
+          <input id="set-bar" type="number" step="0.5" min="0" value="${S.settings.barWeight}" class="w-full h-9 px-2 rounded-md border border-line bg-ground font-mono text-[13px] tnum text-ink"></label>
+      </div>
+      <p class="text-[12px] text-ink3 mt-2">Your log lives in this browser only. Copy it out before you switch phone or laptop.</p>
+      <div class="flex flex-wrap gap-2 mt-3">
+        <button id="export" class="px-3 py-1.5 rounded-md border border-line text-[13px] font-semibold text-ink2 hover:text-ink hover:border-ink3 transition-colors">Copy my log</button>
+        <button id="import" class="px-3 py-1.5 rounded-md border border-line text-[13px] font-semibold text-ink2 hover:text-ink hover:border-ink3 transition-colors">Paste a log in</button>
+        <button id="reset" class="px-3 py-1.5 rounded-md border border-line text-[13px] font-semibold text-pull hover:border-pull transition-colors ml-auto">Erase everything</button>
+      </div>
+    </div>
+
+    <div class="card rounded-lg p-4">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-3">The mark</h2>
+      <div class="flex flex-wrap items-end gap-6">
+        <div class="flex items-center gap-2.5">
+          ${logoMark(44)}
+          <span class="leading-none">
+            <span class="block font-cond font-bold text-[26px] tracking-tight text-ink">MYWORKOUT</span>
+            <span class="block font-mono text-[12px] tracking-[0.3em] text-accent -mt-0.5">TRACKER</span>
+          </span>
+        </div>
+        <div class="flex items-end gap-3">${[32,24,18].map(n => logoMark(n)).join('')}</div>
+      </div>
+      <p class="text-[13px] text-ink2 mt-3 leading-snug max-w-[58ch]">Three bars rising off a loaded barbell &mdash; the gym at the base, progress growing out of it. The bars take the colour of whatever you&rsquo;re training today, so the app shifts from blue to rose to amber to green as you move through the week.</p>
+    </div>`);
+}
+</script>
+
+<script>
+/* ═══════════════ Rest timer ═══════════════ */
+let restLeft = 0, restTotal = 0, restTick = null;
+const C = 2 * Math.PI * 15.5;
+function startRest(sec){
+  restTotal = restLeft = sec;
+  $('#rest').prop('hidden', false);
+  $('#ring').attr('stroke-dasharray', C.toFixed(1));
+  paintRest();
+  clearInterval(restTick);
+  restTick = setInterval(() => {
+    restLeft--;
+    if (restLeft <= 0){
+      stopRest();
+      toast('Rest over — next set.');
+      if (navigator.vibrate) try { navigator.vibrate([120,70,120]); } catch(e){}
+    } else paintRest();
+  }, 1000);
+}
+function paintRest(){
+  $('#rest-time').text(Math.floor(restLeft/60) + ':' + String(restLeft % 60).padStart(2,'0'));
+  $('#ring').attr('stroke-dashoffset', (C * (1 - restLeft/restTotal)).toFixed(1));
+}
+function stopRest(){ clearInterval(restTick); restTick = null; $('#rest').prop('hidden', true); }
+
+let toastT = null;
+function toast(msg){
+  $('#toast').text(msg).prop('hidden', false).removeClass('hidden');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => $('#toast').addClass('hidden'), 2600);
+}
+
+/* ═══════════════ Editing ═══════════════ */
+function writeSet(liftId, i, field, value){
+  const lift = LIFT_BY_ID[liftId];
+  const sess = getSession(lift.day, S.ui.date, true);
+  const e = sess.ex[liftId] || (sess.ex[liftId] = { m:false, sets:[] });
+  while (e.sets.length <= i) e.sets.push({});
+  const wasBlank = !(e.sets[i].reps > 0);
+  if (value === '' || value == null) delete e.sets[i][field];
+  else e.sets[i][field] = Math.max(0, +value);
+
+  /* A fresh rep count means the set just finished — start resting. */
+  if (field === 'reps' && wasBlank && e.sets[i].reps > 0){
+    if (e.sets[i].kg == null){
+      const c = coach(lift, weekOf(S.ui.date));
+      if (c.kg != null) e.sets[i].kg = c.kg;
+    }
+    startRest(lift.big ? 150 : 75);
+  }
+  save();
+}
+function refreshTrain(){ renderDayPicker(); renderPhase(); renderSession(); }
+
+$(function(){
+  S = load() || seed();
+
+  /* theme */
+  const ICON = { system:'◐', light:'☀', dark:'☾' };
+  function applyTheme(){
+    const t = S.settings.theme;
+    if (t === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', t);
+    $('#theme-btn').html(`<span class="text-[15px] leading-none">${ICON[t]}</span>`).attr('title', 'Theme: ' + t);
+  }
+  $('#theme-btn').on('click', function(){
+    const order = ['system','light','dark'];
+    S.settings.theme = order[(order.indexOf(S.settings.theme) + 1) % 3];
+    applyTheme(); save();
+  });
+
+  $('#logo-slot').html(logoMark(26));
+
+  /* tabs */
+  function showTab(t){
+    S.ui.tab = t; save();
+    ['train','progress','plan'].forEach(k => $('#view-' + k).prop('hidden', k !== t));
+    $('.tab').each(function(){
+      const on = $(this).data('tab') === t;
+      $(this).toggleClass('tab-on', on).toggleClass('text-ink2', !on);
+      $(this).find('.tabdot').css('opacity', on ? 1 : 0);
+      $(this).attr('aria-selected', on);
+    });
+    if (t === 'progress') renderProgress();
+    if (t === 'plan') renderPlan();
+    if (t === 'train') refreshTrain();
+    window.scrollTo({ top:0, behavior:'instant' });
+  }
+  $(document).on('click', '.tab', function(){ showTab($(this).data('tab')); });
+  $('#brand').on('click', e => { e.preventDefault(); showTab('train'); });
+
+  /* train interactions */
+  $('#date').val(S.ui.date).on('change', function(){
+    S.ui.date = $(this).val() || todayISO(); save(); refreshTrain();
+  });
+  $(document).on('click', '.day-btn', function(){ S.ui.day = $(this).data('day'); save(); refreshTrain(); });
+
+  $(document).on('input change', '.inp', function(){
+    const id = $(this).data('id'), i = +$(this).data('i'), f = $(this).data('f');
+    writeSet(id, i, f, this.value);
+    const sess = getSession(S.ui.day, S.ui.date, false);
+    const t = sess && sess.ex[id] && sess.ex[id].sets[i];
+    const $row = $(this).closest('[data-row]');
+    $row.find('.tick').replaceWith(tickHTML(!!(t && t.reps > 0)));
+    /* Logging reps alone adopts the coach's weight — show it rather than leave a placeholder. */
+    if (f === 'reps' && t && t.kg != null){
+      const $kg = $row.find('.inp[data-f="kg"]');
+      if ($kg.val() === '') $kg.val(fmtKg(t.kg));
+    }
+    renderFoot(sess);
+  });
+  $(document).on('click', '.step', function(){
+    const $inp = $(this).siblings('.inp');
+    const lift = LIFT_BY_ID[$(this).data('id')];
+    const stepBy = $(this).data('f') === 'kg' ? lift.inc : 1;
+    const c = coach(lift, weekOf(S.ui.date));
+    const base = $inp.val() !== '' ? +$inp.val()
+               : ($(this).data('f') === 'kg' ? (c.kg != null ? c.kg : 0) : lift.hi);
+    const next = Math.max(0, Math.round((base + stepBy * $(this).data('d')) * 100) / 100);
+    $inp.val(next).trigger('change');
+  });
+  $(document).on('click', '.mswap', function(){
+    const id = $(this).data('id'), lift = LIFT_BY_ID[id];
+    const sess = getSession(lift.day, S.ui.date, true);
+    const e = sess.ex[id] || (sess.ex[id] = { m:false, sets:[] });
+    e.m = !e.m; save(); refreshTrain();
+  });
+  $(document).on('click', '#finish', function(){
+    const sess = getSession(S.ui.day, S.ui.date, false);
+    if (!sess) return;
+    sess.done = true; save();
+    const prs = Object.keys(sess.ex).filter(id => {
+      const st = statsFor(id); if (!st || sess.ex[id].m) return false;
+      const top = Math.max(0, ...sess.ex[id].sets.map(t => t.kg || 0));
+      return top > 0 && top >= st.best && st.sessions > 1;
+    });
+    toast(prs.length ? `Session logged — ${prs.length} new best${prs.length > 1 ? 's' : ''}.` : 'Session logged.');
+    refreshTrain();
+  });
+  $(document).on('input change', '.cf', function(){
+    const sess = getSession('cardio', S.ui.date, true);
+    sess.cardio = sess.cardio || {};
+    const k = $(this).data('k');
+    sess.cardio[k] = this.type === 'checkbox' ? this.checked : (this.value === '' ? null : (this.type === 'number' ? +this.value : this.value));
+    save();
+    const mins = S.sessions.filter(x => x.day === 'cardio').reduce((n,x) => n + (+(x.cardio && x.cardio.minutes) || 0), 0);
+    const cnt  = S.sessions.filter(x => x.day === 'cardio' && x.cardio && x.cardio.minutes).length;
+    $('#session-foot .tnum').eq(0).text(cnt);
+    $('#session-foot .tnum').eq(1).text(mins);
+  });
+
+  /* progress interactions */
+  $('#table-toggle').on('click', function(){
+    const t = $('#vol-table'), hidden = t.prop('hidden');
+    t.prop('hidden', !hidden); $(this).text(hidden ? 'Hide table' : 'Show table');
+  });
+  $(document).on('mouseenter focus', '.vbar', function(e){
+    $('#tip').text($(this).attr('data-tip')).removeClass('hidden');
+  }).on('mousemove', '.vbar', function(e){
+    const w = $('#tip').outerWidth();
+    $('#tip').css({ left: Math.min(e.clientX + 12, window.innerWidth - w - 8), top: e.clientY - 36 });
+  }).on('mouseleave blur', '.vbar', function(){ $('#tip').addClass('hidden'); });
+
+  /* plan interactions */
+  $(document).on('click', '.dpw', function(){ S.settings.daysPerWeek = +$(this).data('n'); save(); renderPlan(); renderPhase(); });
+  $(document).on('change', '#set-start', function(){ S.settings.startDate = this.value || todayISO(); save(); renderPlan(); });
+  $(document).on('change', '#set-bar', function(){ S.settings.barWeight = Math.max(0, +this.value || 20); save(); });
+  $(document).on('click', '#export', function(){
+    const txt = JSON.stringify(S);
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => toast('Log copied — paste it somewhere safe.'), () => window.prompt('Copy your log:', txt));
+    else window.prompt('Copy your log:', txt);
+  });
+  $(document).on('click', '#import', function(){
+    const txt = window.prompt('Paste a log you copied earlier:');
+    if (!txt) return;
+    try { const p = JSON.parse(txt); if (p.v !== 1) throw 0; S = p; save(); applyTheme(); showTab('train'); toast('Log restored.'); }
+    catch(e){ toast('That didn’t look like a MyWorkoutTracker log.'); }
+  });
+  $(document).on('click', '#reset', function(){
+    if (!window.confirm('Erase every session you have logged? This cannot be undone.')) return;
+    S = blankState(); save(); applyTheme(); showTab('train'); toast('Cleared. Fresh start.');
+  });
+  $('#clear-sample').on('click', function(){
+    S = blankState(); save(); showTab('train'); toast('Sample cleared — the log is yours now.');
+  });
+
+  $('#rest-add').on('click', () => { restLeft += 30; restTotal = Math.max(restTotal, restLeft); paintRest(); });
+  $('#rest-skip').on('click', stopRest);
+
+  applyTheme();
+  $('#sample-banner').prop('hidden', !S.sample);
+  showTab(S.ui.tab || 'train');
+});
+
+/* ═══════════════ Sample data ═══════════════
+   Three weeks of plausible history so the app opens as a working
+   log rather than an empty shell. One tap clears it.            */
+function seed(){
+  const s = blankState();
+  s.sample = true;
+  /* Anchor three weeks back, on a Monday, so weeks line up with the schedule. */
+  const start = new Date(); start.setDate(start.getDate() - 21);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  s.settings.startDate = start.toISOString().slice(0,10);
+  const iso = off => { const d = new Date(start); d.setDate(start.getDate() + off); return d.toISOString().slice(0,10); };
+
+  const base = { p1:22.5, p2:14, p3:12, p4:6, p5:10, u1:0, u2:35, u3:18, u4:5, u5:10, u6:10, l1:40, l2:40, l3:12, l4:50, l5:16 };
+  const DAY_OFFSET = { push:0, pull:1, legs:3 };   /* Mon · Tue · Thu, per the Guide */
+
+  [0,7,14].forEach((off, wk) => {
+    ['push','pull','legs'].forEach(day => {
+      const date = iso(off + DAY_OFFSET[day]);
+      const sess = { id: day + '-' + date, day, date, done:true, ex:{}, cardio:{} };
+      PROGRAM[day].lifts.forEach((l, idx) => {
+        const n  = wk < 2 ? 2 : l.sets;                       /* weeks 1–2 are two sets */
+        const kg = Math.round((base[l.id] + wk * l.inc) * 2) / 2;
+        /* In the newest week roughly half the lifts top out the rep range,
+           so the coach has something to say on both sides. */
+        const bump = (wk === 2 && idx % 2 === 0) ? 2 : 0;
+        sess.ex[l.id] = { m:false, sets: Array.from({ length:n }, (_,i) => ({
+          kg: l.noLoad ? 0 : kg,
+          reps: Math.min(l.hi, Math.max(l.lo, l.hi - i + bump))
+        })) };
+      });
+      s.sessions.push(sess);
+    });
+    s.sessions.push({ id:'cardio-' + iso(off + 5), day:'cardio', date: iso(off + 5), done:true, ex:{},
+                      cardio:{ type: wk === 1 ? 'Rower' : 'Incline walk', minutes: 28 + wk*2, km: 3.2 + wk*0.4, core: 3, intervals:false, notes:'' } });
+  });
+  s.ui.date = todayISO();
+  return s;
+}
+</script>
+
+</body>
+</html>
