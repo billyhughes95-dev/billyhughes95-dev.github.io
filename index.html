@@ -176,6 +176,8 @@ input[type=number]{ -moz-appearance:textfield; }
       <h1 class="font-cond font-bold text-2xl tracking-tight uppercase mb-3">Progress</h1>
       <div id="stat-row" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-6"></div>
 
+      <div id="row-progress" class="mb-6"></div>
+
       <div class="card rounded-lg p-4 mb-6">
         <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
           <h2 class="font-cond font-semibold text-lg uppercase tracking-wide">Tonnage lifted per week</h2>
@@ -275,11 +277,11 @@ const PROGRAM = {
   legs: {
     name: 'Legs', token: 'legs', sub: 'Quads · Hamstrings · Glutes · Calves',
     lifts: [
-      { id:'l1', name:'Back squat / goblet squat',       target:'3 × 6–10',       sets:3, lo:6,  hi:10, swap:'Leg press / hack squat',   kind:'barbell',  big:true,  inc:2.5 },
+      { id:'l1', name:'Back squat / goblet squat',       target:'3 × 6–10',       sets:3, lo:6,  hi:10, swap:'Hack squat / Smith squat',  kind:'barbell',  big:true,  inc:2.5 },
       { id:'l2', name:'Romanian deadlift',               target:'3 × 8–10',       sets:3, lo:8,  hi:10, swap:'Lying / seated leg curl',  kind:'barbell',  big:true,  inc:2.5 },
-      { id:'l3', name:'Bulgarian split squat / lunges',  target:'3 × 10 each leg',sets:3, lo:10, hi:10, swap:'Single-leg leg press',     kind:'dumbbell', big:true,  inc:2 },
-      { id:'l4', name:'Barbell hip thrust',              target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Glute drive machine',      kind:'barbell',  big:true,  inc:2.5 },
-      { id:'l5', name:'Standing DB calf raises',         target:'3 × 12–15',      sets:3, lo:12, hi:15, swap:'Calf raise machine',       kind:'dumbbell', big:false, inc:2 }
+      { id:'l3', name:'Leg press',                       target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Hack squat / leg extension',kind:'cable',    big:true,  inc:5 },
+      { id:'l4', name:'Seated leg curl',                 target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Lying leg curl',           kind:'cable',    big:false, inc:2.5 },
+      { id:'l5', name:'Standing barbell calf raises',    target:'3 × 12–15',      sets:3, lo:12, hi:15, swap:'Calf raise machine',       kind:'barbell',  big:false, inc:2.5 }
     ]
   },
   cardio: {
@@ -297,7 +299,8 @@ const GUIDE = {
     ['kg',             'The weight you used. For dumbbell lifts that means per dumbbell, not the pair.'],
     ['Alt',            'Another way to do the lift if the kit is busy or your gym hasn’t got it. It’s only a note — log it exactly the same way, and your bests carry on as normal.'],
     ['Best kg',        'Your heaviest logged working set on that lift so far.'],
-    ['Gain kg',        'How much heavier that is than the very first session you logged.']
+    ['Gain kg',        'How much heavier that is than the very first session you logged.'],
+    ['500 m row',      'Three pieces to finish every session, whatever day it is. Type each time as m:ss — 1:52 — or just the seconds. The average pools every piece you have ever rowed, across all four session types, and lives on the Progress tab.']
   ],
   schedule: {
     4: [['Mon','Push'],['Tue','Pull'],['Thu','Legs'],['Sat','Cardio + core']],
@@ -392,13 +395,15 @@ function getSession(day, date, create){
 /* Has anything actually been logged into this session? */
 function sessionHasWork(s){
   return Object.values(s.ex || {}).some(e => e.sets.some(t => t.reps > 0))
-      || !!(s.cardio && s.cardio.minutes);
+      || !!(s.cardio && s.cardio.minutes)
+      || liveSplits(s).length > 0;
 }
 
 /* Nothing typed in at all — the row exists only because you opened the day. */
 function sessionIsEmpty(s){
   return !Object.values(s.ex || {}).some(e => e.sets.some(t => Object.keys(t).length))
-      && !Object.values(s.cardio || {}).some(v => v !== null && v !== '' && v !== false);
+      && !Object.values(s.cardio || {}).some(v => v !== null && v !== '' && v !== false)
+      && !rowSplits(s).some(v => v != null);
 }
 
 /* A row is created the moment you touch a field, so clearing what you typed
@@ -477,6 +482,109 @@ function statsFor(liftId){
   const first = h[0].top.kg || 0;
   const e1    = h.reduce((m,x) => Math.max(m, ...x.sets.map(t => e1rm(t.kg, t.reps))), 0);
   return { unit:'kg', best, gain: best - first, e1rm: e1, sessions: h.length, series: h.map(x => x.top.kg || 0), hist: h };
+}
+
+/* ── The 500 m row finisher ────────────────────
+   Three pieces at the end of every session, whichever day it is.
+   Splits are stored as seconds so the averages are just arithmetic. */
+const ROW_PIECES = 3;
+
+const rowSplits  = s => (s && s.row && Array.isArray(s.row.splits)) ? s.row.splits : [];
+const liveSplits = s => rowSplits(s).filter(v => v > 0);
+
+/* "1:52", "1:52.4", "112" and "112.4" all mean the same thing — the monitor
+   shows m:ss, but a time read off it in seconds shouldn't be rejected. */
+function parseSplit(txt){
+  const t = (txt || '').trim().replace(',', '.');
+  const mm = /^(\d{1,2}):(\d{1,2}(?:\.\d+)?)$/.exec(t);
+  let sec = null;
+  if (mm && +mm[2] < 60) sec = (+mm[1]) * 60 + (+mm[2]);
+  else if (/^\d{1,4}(?:\.\d+)?$/.test(t)) sec = +t;
+  return (sec != null && sec > 0 && sec < 3600) ? Math.round(sec * 10) / 10 : null;
+}
+function fmtSplit(sec){
+  if (sec == null || !(sec > 0)) return '–';
+  const t = Math.round(sec * 10) / 10;
+  const m = Math.floor(t / 60), rest = Math.round((t - m * 60) * 10) / 10;
+  const whole = Math.floor(rest), tenth = Math.round((rest - whole) * 10);
+  return m + ':' + String(whole).padStart(2, '0') + (tenth ? '.' + tenth : '');
+}
+const avgOf = v => v.length ? v.reduce((n,x) => n + x, 0) / v.length : null;
+
+/* Every piece ever logged, pooled across push, pull, legs and cardio alike ─
+   one rowing average for the whole programme, not one per session type. */
+function rowStats(){
+  const byDate = S.sessions.slice()
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(s => ({ date:s.date, day:s.day, splits: liveSplits(s) }))
+    .filter(x => x.splits.length);
+  if (!byDate.length) return null;
+  const all = byDate.reduce((v,x) => v.concat(x.splits), []);
+  return {
+    pieces: all.length,
+    sessions: byDate.length,
+    avg: avgOf(all),
+    best: Math.min.apply(null, all),
+    last: byDate[byDate.length - 1],
+    series: byDate.map(x => avgOf(x.splits))
+  };
+}
+
+/* The piece we'd expect today: your last rowing session's average. */
+function rowTarget(){
+  const prev = S.sessions.slice()
+    .filter(s => s.date < S.ui.date && liveSplits(s).length)
+    .sort((a,b) => a.date.localeCompare(b.date)).pop();
+  return prev ? avgOf(liveSplits(prev)) : null;
+}
+
+function writeSplit(i, value){
+  const sess = getSession(S.ui.day, S.ui.date, true);
+  const row = sess.row || (sess.row = { splits: [] });
+  while (row.splits.length <= i) row.splits.push(null);
+  row.splits[i] = parseSplit(value);
+  if (!row.splits.some(v => v != null)) delete sess.row;
+  pruneIfEmpty(sess);
+  save();
+}
+
+function rowCardHTML(sess){
+  const splits = rowSplits(sess), st = rowStats(), tgt = rowTarget();
+  const mine = liveSplits(sess);
+  const rows = Array.from({ length: ROW_PIECES }, (_,i) => {
+    const v = splits[i];
+    return `<div class="flex items-center gap-2 py-1.5 ${i ? 'border-t border-line' : ''}">
+      <span class="eyebrow w-16 shrink-0">500 m · ${i+1}</span>
+      <input class="rowf w-20 h-9 rounded-md border border-line bg-ground text-center font-mono text-[16px] tnum text-ink"
+             type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+             value="${v != null ? fmtSplit(v) : ''}" placeholder="${tgt != null ? fmtSplit(tgt) : '1:52'}"
+             data-i="${i}" aria-label="500 metre piece ${i+1} time">
+      <span class="eyebrow -ml-0.5">m:ss</span>
+      ${tickHTML(v > 0)}
+    </div>`;
+  }).join('');
+
+  return `<article id="row-card" class="card rounded-lg mb-2.5 rail border-l-0 overflow-hidden">
+    <div class="px-3.5 pt-3 pb-2.5">
+      <h3 class="font-cond font-bold text-[19px] leading-tight uppercase tracking-tight">Finisher — 3 × 500 m row</h3>
+      <p class="text-[12px] text-ink3 mt-0.5">Every session, every day · time per piece</p>
+      <p class="mt-2 text-[13px] leading-snug ${st && mine.length && avgOf(mine) < st.avg ? 'text-cardio' : 'text-ink2'}">${
+        !st ? 'First time logged. Row each 500 m hard but even, and note the time off the monitor.'
+            : (mine.length
+                ? `Today: ${fmtSplit(avgOf(mine))} average over ${mine.length} piece${mine.length > 1 ? 's' : ''}. Your all-session average is ${fmtSplit(st.avg)}.`
+                : `Last row averaged ${fmtSplit(avgOf(st.last.splits))}. Hold that or better across all three.`)
+      }</p>
+    </div>
+    <div class="px-3.5 pb-1 border-t border-line">${rows}</div>
+    <div class="px-3.5 py-2 bg-raised/60 border-t border-line flex items-center gap-3">
+      <div class="flex gap-3.5 font-mono text-[11px] tnum text-ink2">
+        <span>avg <strong class="text-ink font-semibold">${st ? fmtSplit(st.avg) : '–'}</strong> /500m</span>
+        <span>best <strong class="text-ink font-semibold">${st ? fmtSplit(st.best) : '–'}</strong></span>
+        <span class="hidden sm:inline">pieces <strong class="text-ink font-semibold">${st ? st.pieces : 0}</strong></span>
+      </div>
+      <div class="ml-auto w-24 shrink-0">${sparkline(st ? st.series : [])}</div>
+    </div>
+  </article>`;
 }
 
 /* ── The coach ───────────────────────────────────────────────
@@ -742,7 +850,7 @@ function renderSession(){
         <div class="ml-auto w-24 shrink-0">${sparkline(st ? st.series : [])}</div>
       </div>
     </article>`;
-  }).join(''));
+  }).join('') + rowCardHTML(sess));
 
   renderFoot(sess);
 }
@@ -751,11 +859,13 @@ function renderFoot(sess){
   const live = sess ? Object.values(sess.ex).reduce((n,e) => n + e.sets.filter(t => t.reps > 0).length, 0) : 0;
   const vol  = sess ? Object.entries(sess.ex).reduce((n,[id,e]) =>
       LIFT_BY_ID[id] && LIFT_BY_ID[id].noLoad ? n : n + e.sets.reduce((k,t) => k + (t.kg||0)*(t.reps||0), 0), 0) : 0;
+  const rowAvg = sess ? avgOf(liveSplits(sess)) : null;
   $('#session-foot').html(`<div class="card rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <div><div class="eyebrow">Sets logged</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${live}</div></div>
       <div><div class="eyebrow">Tonnage</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${Math.round(vol).toLocaleString()} <span class="text-[12px] text-ink3 font-normal">kg</span></div></div>
+      <div><div class="eyebrow">Row avg</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${rowAvg != null ? fmtSplit(rowAvg) : '–'}</div></div>
       <button id="finish" class="ml-auto px-4 py-2 rounded-lg font-cond font-bold text-[15px] uppercase tracking-wide text-white disabled:opacity-40 transition-opacity"
-        style="background:rgb(var(--accent))" ${live ? '' : 'disabled'}>${sess && sess.done ? (sess.autoFinished ? 'Auto-logged ✓' : 'Session logged ✓') : 'Finish session'}</button>
+        style="background:rgb(var(--accent))" ${sess && sessionHasWork(sess) ? '' : 'disabled'}>${sess && sess.done ? (sess.autoFinished ? 'Auto-logged ✓' : 'Session logged ✓') : 'Finish session'}</button>
     </div>`);
 }
 
@@ -788,7 +898,7 @@ function renderCardio(){
         <label class="block sm:col-span-2"><span class="eyebrow block mb-1">Notes</span>
           <input class="cf w-full h-9 px-2 rounded-md border border-line bg-ground text-[16px] text-ink" type="text" placeholder="How did it feel?" value="${(f('notes','')+'').replace(/"/g,'&quot;')}" data-k="notes"></label>
       </div>
-    </article>`);
+    </article>` + rowCardHTML(sess));
 
   const mins = cardioMinutes(), cnt = cardioCount();
   $('#session-foot').html(`<div class="card rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -824,6 +934,19 @@ function renderProgress(){
     tile('Week streak', streak, '', streak > 1 ? 'weeks in a row with a session' : 'keep it going') +
     tile('Tonnage', Math.round(tonnage).toLocaleString(), 'kg', 'total weight moved') +
     tile('Added to the bar', '+' + fmtKg(Math.round(totalGain*10)/10), 'kg', 'across every lift combined'));
+
+  const rs = rowStats();
+  $('#row-progress').html(`<div class="card rounded-lg p-4" style="--accent: var(--cardio)">
+      <h2 class="font-cond font-semibold text-lg uppercase tracking-wide mb-1">500 m row</h2>
+      <p class="text-[12px] text-ink2 mb-3">The finisher from every session — push, pull, legs and cardio pooled together. Each point is one session's average.</p>
+      <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
+        <div><div class="eyebrow">Average split</div><div class="font-mono font-semibold text-2xl tnum leading-none mt-1.5">${rs ? fmtSplit(rs.avg) : '–'}</div></div>
+        <div><div class="eyebrow">Best piece</div><div class="font-mono font-semibold text-2xl tnum leading-none mt-1.5">${rs ? fmtSplit(rs.best) : '–'}</div></div>
+        <div><div class="eyebrow">Pieces</div><div class="font-mono font-semibold text-2xl tnum leading-none mt-1.5">${rs ? rs.pieces : 0}</div></div>
+        <div><div class="eyebrow">Sessions rowed</div><div class="font-mono font-semibold text-2xl tnum leading-none mt-1.5">${rs ? rs.sessions : 0}</div></div>
+        <div class="ml-auto w-40 shrink-0">${sparkline(rs ? rs.series : [])}</div>
+      </div>
+    </div>`);
 
   volumeChart();
 
@@ -1078,6 +1201,22 @@ $(function(){
     toast(prs.length ? `Session logged — ${prs.length} new best${prs.length > 1 ? 's' : ''}.` : 'Session logged.');
     refreshTrain();
   });
+  $(document).on('change', '.rowf', function(){
+    const i = +$(this).data('i'), had = document.activeElement === this;
+    writeSplit(i, this.value);
+    const sess = getSession(S.ui.day, S.ui.date, false);
+    /* Rebuilding the card is what refreshes the averages, so the field the
+       cursor is sitting in has to be handed its focus back afterwards. */
+    $('#row-card').replaceWith(rowCardHTML(sess));
+    if (had) $(`.rowf[data-i="${i}"]`).trigger('focus');
+    if (S.ui.day === 'cardio'){
+      $('#finish').prop('disabled', !(sess && sessionHasWork(sess)));
+    } else {
+      renderFoot(sess);
+    }
+    renderDayPicker(); renderPhase();
+  });
+
   $(document).on('input change', '.cf', function(){
     const sess = getSession('cardio', S.ui.date, true);
     sess.cardio = sess.cardio || {};
