@@ -19,7 +19,7 @@
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="favicon-16.png" sizes="16x16" type="image/png">
 <style>
-  :root{ color-scheme: dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  :root{ color-scheme: dark; }
   body{ margin:0; font-size:14px; }
   img{ max-width:100%; }
   [hidden]{ display:none !important; }
@@ -77,6 +77,7 @@ tailwind.config = {
 
 body{ background: rgb(var(--ground)); color: rgb(var(--ink)); font-family: Barlow, ui-sans-serif, system-ui, sans-serif; }
 html, body { height: 100%; }
+html { background: rgb(var(--ground)); }
 input, select, textarea, button { color-scheme: dark; }
 /* iOS Safari zooms the whole page when a focused control is under 16px. */
 input, select, textarea { font-size: 16px; }
@@ -123,9 +124,12 @@ input[type=number]{ -moz-appearance:textfield; }
 <div id="app" class="min-h-full flex flex-col">
 
   <!-- ── Top bar ─────────────────────────────────────────────── -->
-  <header class="sticky z-30 bg-ground/90 backdrop-blur border-b border-line"
-          style="top: env(safe-area-inset-top, 0px);">
-    <div class="mx-auto w-full max-w-5xl px-4 py-2.5 flex items-center gap-3">
+  <!-- Pinned to the very top, with the status-bar / Dynamic Island inset carried
+       as the bar's own padding: the island sits on solid header, and the row
+       below it clears the cut-out instead of tucking under it. -->
+  <header class="sticky top-0 z-30 border-b border-line"
+          style="padding-top: calc(max(env(safe-area-inset-top, 0px), 8px) + 4px); background: rgb(var(--ground));">
+    <div class="mx-auto w-full max-w-5xl px-4 pt-1 pb-2.5 flex items-center gap-3">
 
       <a href="#" id="brand" class="flex items-center gap-2.5 shrink-0" aria-label="MyWorkoutTracker — home">
         <span id="logo-slot" class="block"></span>
@@ -254,14 +258,14 @@ const PROGRAM = {
       { id:'p2', name:'Incline dumbbell press',          target:'3 × 10–12',  sets:3, lo:10, hi:12, swap:'Incline press / Smith machine', kind:'dumbbell', big:true,  inc:2 },
       { id:'p3', name:'Seated dumbbell shoulder press',  target:'3 × 8–10',   sets:3, lo:8,  hi:10, swap:'Shoulder press machine',     kind:'dumbbell', big:true,  inc:2 },
       { id:'p4', name:'Dumbbell lateral raises',         target:'3 × 12–15',  sets:3, lo:12, hi:15, swap:'Cable / machine lateral raise', kind:'dumbbell', big:false, inc:1 },
-      { id:'p5', name:'Overhead DB triceps extension',   target:'3 × 10–12',  sets:3, lo:10, hi:12, swap:'Cable rope pushdown',        kind:'dumbbell', big:false, inc:1 }
+      { id:'p5', name:'Cable rope pushdown',             target:'3 × 10–12',  sets:3, lo:10, hi:12,                                    kind:'cable',    big:false, inc:1 }
     ]
   },
   pull: {
     name: 'Pull', token: 'pull', sub: 'Back · Rear delts · Biceps',
     lifts: [
-      { id:'u1', name:'Pull-ups / chin-ups',          target:'3 × max',        sets:3, lo:5,  hi:10, swap:'Lat pulldown / assisted pull-up', kind:'bodyweight', big:true,  inc:2.5, noLoad:true },
-      { id:'u2', name:'Barbell bent-over row',        target:'3 × 8–10',       sets:3, lo:8,  hi:10, swap:'Seated cable row',            kind:'barbell',  big:true,  inc:2.5 },
+      { id:'u1', name:'Lat pulldown / assisted pull-up', target:'3 × 8–10',    sets:3, lo:8,  hi:10,                                     kind:'cable',    big:true,  inc:2.5 },
+      { id:'u2', name:'Seated cable row',             target:'3 × 8–10',       sets:3, lo:8,  hi:10,                                     kind:'cable',    big:true,  inc:2.5 },
       { id:'u3', name:'Single-arm dumbbell row',      target:'3 × 10–12 each', sets:3, lo:10, hi:12, swap:'Chest-supported row machine', kind:'dumbbell', big:true,  inc:2 },
       { id:'u4', name:'Dumbbell rear delt flyes',     target:'3 × 12–15',      sets:3, lo:12, hi:15, swap:'Reverse pec deck',            kind:'dumbbell', big:false, inc:1 },
       { id:'u5', name:'Dumbbell curls',               target:'3 × 10–12',      sets:3, lo:10, hi:12, swap:'Cable curl',                  kind:'dumbbell', big:false, inc:1 },
@@ -291,7 +295,7 @@ const GUIDE = {
   howto: [
     ['Log as you go',  'Type the weight and reps into each set as you finish it. Everything else — bests, gains, estimated max, charts — works itself out.'],
     ['kg',             'The weight you used. For dumbbell lifts that means per dumbbell, not the pair.'],
-    ['M',              'Tap M when you used the machine alternative that day, so you know the weight isn’t comparable to the free-weight version.'],
+    ['Alt',            'Another way to do the lift if the kit is busy or your gym hasn’t got it. It’s only a note — log it exactly the same way, and your bests carry on as normal.'],
     ['Best kg',        'Your heaviest logged working set on that lift so far.'],
     ['Gain kg',        'How much heavier that is than the very first session you logged.']
   ],
@@ -337,6 +341,8 @@ function logoMark(px, cls){
 /* ═══════════════ State & storage ═══════════════ */
 const KEY = 'mywt.v1';
 const DAY_MS = 86400000;
+/* A session left open this long is closed for you — nobody lifts for three hours. */
+const AUTO_FINISH_MS = 3 * 60 * 60 * 1000;
 let S = null;
 
 const todayISO = () => new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
@@ -377,10 +383,70 @@ function phaseOf(week){
 function getSession(day, date, create){
   let s = S.sessions.find(x => x.day === day && x.date === date);
   if (!s && create){
-    s = { id: day + '-' + date, day, date, done:false, ex:{}, cardio:{} };
+    s = { id: day + '-' + date, day, date, done:false, startedAt: Date.now(), ex:{}, cardio:{} };
     S.sessions.push(s);
   }
   return s;
+}
+
+/* Has anything actually been logged into this session? */
+function sessionHasWork(s){
+  return Object.values(s.ex || {}).some(e => e.sets.some(t => t.reps > 0))
+      || !!(s.cardio && s.cardio.minutes);
+}
+
+/* Nothing typed in at all — the row exists only because you opened the day. */
+function sessionIsEmpty(s){
+  return !Object.values(s.ex || {}).some(e => e.sets.some(t => Object.keys(t).length))
+      && !Object.values(s.cardio || {}).some(v => v !== null && v !== '' && v !== false);
+}
+
+/* A row is created the moment you touch a field, so clearing what you typed
+   has to take the row with it — otherwise opening a day would log a session. */
+function pruneIfEmpty(s){
+  if (!s || s.done || !sessionIsEmpty(s)) return;
+  const i = S.sessions.indexOf(s);
+  if (i > -1) S.sessions.splice(i, 1);
+}
+
+/* A session counts towards your week only once it has been finished off,
+   either by you or by the three-hour timer. */
+function isComplete(s){ return !!s.done; }
+
+/* The date is where you're looking, not a setting you keep: opening the app
+   should land on today, not on whatever day you last logged. Picking a date by
+   hand to fill in an earlier session holds for the rest of that real day, so a
+   resume mid-backfill doesn't yank you away; come the next day it rolls on. */
+let handPickedOn = null;
+
+function dateIsPinned(){ return handPickedOn != null && handPickedOn === todayISO(); }
+
+function rollDateToToday(){
+  const today = todayISO();
+  if (S.ui.date === today) return false;
+  S.ui.date = today; save();
+  $('#date').val(today);
+  return true;
+}
+
+/* Close out any session still open three hours after it was started.
+   Logs from earlier days never had a timestamp, so they close on sight. */
+function autoFinishStale(){
+  const now = Date.now(), today = todayISO();
+  let closed = 0, touched = false;
+  S.sessions.forEach(s => {
+    if (s.done) return;
+    if (!sessionHasWork(s)) return;
+    if (s.startedAt == null){
+      if (s.date >= today){ s.startedAt = now; touched = true; return; }
+      s.startedAt = parseISO(s.date).getTime();
+    }
+    if (now - s.startedAt >= AUTO_FINISH_MS){
+      s.done = true; s.autoFinished = true; closed++; touched = true;
+    }
+  });
+  if (touched) save();
+  return closed;
 }
 /* Every logged session for a lift, oldest first, only those with real sets. */
 function historyFor(liftId){
@@ -392,7 +458,7 @@ function historyFor(liftId){
       const e = s.ex[liftId];
       const live = e.sets.filter(t => t.reps > 0);
       const top  = live.reduce((best,t) => (t.kg||0) > (best.kg||0) ? t : best, live[0]);
-      return { date:s.date, week:weekOf(s.date), machine:!!e.m, sets:live, top,
+      return { date:s.date, week:weekOf(s.date), sets:live, top,
                volume: live.reduce((n,t) => n + (t.kg||0)*(t.reps||0), 0),
                reps:   live.reduce((n,t) => n + (t.reps||0), 0) };
     });
@@ -400,7 +466,7 @@ function historyFor(liftId){
 const e1rm = (kg, reps) => (kg && reps) ? kg * (1 + reps/30) : 0;
 
 function statsFor(liftId){
-  const h = historyFor(liftId).filter(x => !x.machine);
+  const h = historyFor(liftId);
   if (!h.length) return null;
   if (LIFT_BY_ID[liftId].noLoad){
     const per = h.map(x => Math.max(...x.sets.map(t => t.reps || 0)));
@@ -418,7 +484,7 @@ function statsFor(liftId){
    then says what to put on the bar today.                      */
 function coach(lift, week){
   const ph = phaseOf(week);
-  const h  = historyFor(lift.id).filter(x => !x.machine);
+  const h  = historyFor(lift.id);
   const prev = h.filter(x => x.date < S.ui.date).pop();
 
   if (!prev){
@@ -563,13 +629,15 @@ function volumeChart(){
 function renderDayPicker(){
   $('#day-picker').html(DAYS.map(d => {
     const p = PROGRAM[d], on = S.ui.day === d;
-    const logged = !!getSession(d, S.ui.date, false);
+    const ds = getSession(d, S.ui.date, false);
+    const mark = ds && isComplete(ds) ? 'done' : (ds && !sessionIsEmpty(ds) ? 'open' : '');
     return `<button class="day-btn group text-left rounded-lg px-3 py-2.5 border transition-colors ${
         on ? 'border-transparent text-white' : 'bg-surface border-line hover:border-ink3'}"
         ${on ? `style="background:rgb(var(--${d}))"` : ''} data-day="${d}" role="button" aria-pressed="${on}">
       <span class="flex items-center gap-1.5">
         <span class="font-cond font-bold text-lg uppercase tracking-wide leading-none ${on ? '' : 'text-ink'}">${p.name}</span>
-        ${logged ? `<span class="w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : ''}" ${on ? '' : `style="background:rgb(var(--${d}))"`} title="Logged"></span>` : ''}
+        ${mark === 'done' ? `<span class="w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : ''}" ${on ? '' : `style="background:rgb(var(--${d}))"`} title="Finished"></span>` : ''}
+        ${mark === 'open' ? `<span class="w-1.5 h-1.5 rounded-full border ${on ? 'border-white' : 'border-ink3'}" title="Started, not finished"></span>` : ''}
       </span>
       <span class="block text-[11px] mt-0.5 leading-tight ${on ? 'text-white/80' : 'text-ink3'}">${p.sub}</span>
     </button>`;
@@ -578,7 +646,7 @@ function renderDayPicker(){
 
 function renderPhase(){
   const wk = weekOf(S.ui.date), ph = phaseOf(wk);
-  const done = S.sessions.filter(s => weekOf(s.date) === wk).length;
+  const done = S.sessions.filter(s => weekOf(s.date) === wk && isComplete(s)).length;
   $('#week-pill').text(`WK ${wk} / 12`);
   $('#phase-note').html(`
     <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -598,6 +666,7 @@ function tickHTML(done){
 
 function plateStrip(lift, kg){
   if (lift.noLoad) return `<span class="text-[12px] text-ink3">Bodyweight &mdash; log any added weight in the kg box.</span>`;
+  if (lift.kind === 'cable') return `<span class="text-[12px] text-ink3">Cable stack &mdash; set the pin to <strong class="text-ink2 font-semibold tnum">${fmtKg(kg)} kg</strong>.</span>`;
   if (lift.kind === 'dumbbell') return `<span class="text-[12px] text-ink3">Per dumbbell &mdash; grab a pair of <strong class="text-ink2 font-semibold tnum">${fmtKg(kg)} kg</strong>.</span>`;
   const bar = S.settings.barWeight, sp = plateSplit(kg, bar);
   if (!sp.side.length) return `<span class="text-[12px] text-ink3">Empty ${bar} kg bar.</span>`;
@@ -622,7 +691,7 @@ function renderSession(){
   const nSets = ph.sets ? Math.min(ph.sets, 3) : null;
 
   $('#session-body').html(p.lifts.map(lift => {
-    const e = (sess && sess.ex[lift.id]) || { m:false, sets:[] };
+    const e = (sess && sess.ex[lift.id]) || { sets:[] };
     const c = coach(lift, wk);
     const setCount = nSets ? Math.min(nSets, lift.sets) : lift.sets;
     const st = statsFor(lift.id);
@@ -655,18 +724,13 @@ function renderSession(){
 
     return `<article class="card rounded-lg mb-2.5 rail border-l-0 overflow-hidden" data-lift="${lift.id}">
       <div class="px-3.5 pt-3 pb-2.5">
-        <div class="flex items-start gap-2">
-          <div class="min-w-0">
-            <h3 class="font-cond font-bold text-[19px] leading-tight uppercase tracking-tight">${lift.name}</h3>
-            <p class="text-[12px] text-ink3 mt-0.5">${lift.target}${lift.kind === 'dumbbell' ? ' · per dumbbell' : ''}</p>
-          </div>
-          <button class="mswap ml-auto shrink-0 px-2 py-1 rounded-md border text-[11px] font-mono tracking-wide transition-colors ${
-            e.m ? 'border-transparent bg-accent text-white' : 'border-line text-ink3 hover:text-ink hover:border-ink3'}"
-            data-id="${lift.id}" aria-pressed="${!!e.m}" title="${lift.swap}">M</button>
-        </div>
-        ${e.m ? `<p class="mt-2 text-[12px] text-ink2 bg-raised rounded-md px-2 py-1.5">On the <strong class="font-semibold text-ink">${lift.swap}</strong> — weights won’t match the free-weight version, so it sits outside your bests.</p>` : ''}
+        <h3 class="font-cond font-bold text-[19px] leading-tight uppercase tracking-tight">${lift.name}</h3>
+        <p class="text-[12px] text-ink3 mt-0.5">${lift.target}${lift.kind === 'dumbbell' ? ' · per dumbbell' : ''}</p>
+        ${lift.swap ? `<p class="mt-1.5 flex items-start gap-1.5 text-[12px] text-ink2">
+          <span class="shrink-0 mt-[1px] font-mono text-[10px] uppercase tracking-wide text-ink3 border border-line rounded px-1 py-[1px]">alt</span>
+          <span>${lift.swap}</span></p>` : ''}
         <p class="mt-2 text-[13px] leading-snug ${vcol}"><span class="font-semibold">${ { up:'Go up.', down:'Back off.', hold:'Hold.', first:'Set a baseline.' }[c.verdict] }</span> <span class="text-ink2">${c.line}</span></p>
-        ${!e.m ? `<div class="mt-2">${plateStrip(lift, c.kg != null ? c.kg : 0)}</div>` : ''}
+        <div class="mt-2">${plateStrip(lift, c.kg != null ? c.kg : 0)}</div>
       </div>
       <div class="px-3.5 pb-1 border-t border-line">${rows}</div>
       <div class="px-3.5 py-2 bg-raised/60 border-t border-line flex items-center gap-3">
@@ -691,9 +755,13 @@ function renderFoot(sess){
       <div><div class="eyebrow">Sets logged</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${live}</div></div>
       <div><div class="eyebrow">Tonnage</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${Math.round(vol).toLocaleString()} <span class="text-[12px] text-ink3 font-normal">kg</span></div></div>
       <button id="finish" class="ml-auto px-4 py-2 rounded-lg font-cond font-bold text-[15px] uppercase tracking-wide text-white disabled:opacity-40 transition-opacity"
-        style="background:rgb(var(--accent))" ${live ? '' : 'disabled'}>${sess && sess.done ? 'Session logged ✓' : 'Finish session'}</button>
+        style="background:rgb(var(--accent))" ${live ? '' : 'disabled'}>${sess && sess.done ? (sess.autoFinished ? 'Auto-logged ✓' : 'Session logged ✓') : 'Finish session'}</button>
     </div>`);
 }
+
+const cardioMinutes = () => S.sessions.filter(s => s.day === 'cardio' && isComplete(s))
+  .reduce((n,s) => n + (+(s.cardio && s.cardio.minutes) || 0), 0);
+const cardioCount = () => S.sessions.filter(s => s.day === 'cardio' && isComplete(s) && s.cardio && s.cardio.minutes).length;
 
 function renderCardio(){
   const sess = getSession('cardio', S.ui.date, false);
@@ -722,11 +790,12 @@ function renderCardio(){
       </div>
     </article>`);
 
-  const mins = S.sessions.filter(s => s.day === 'cardio').reduce((n,s) => n + (+(s.cardio && s.cardio.minutes) || 0), 0);
-  const cnt  = S.sessions.filter(s => s.day === 'cardio' && s.cardio && s.cardio.minutes).length;
+  const mins = cardioMinutes(), cnt = cardioCount();
   $('#session-foot').html(`<div class="card rounded-lg px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <div><div class="eyebrow">Cardio sessions</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${cnt}</div></div>
       <div><div class="eyebrow">Total minutes</div><div class="font-mono font-semibold text-xl tnum leading-none mt-0.5">${mins}</div></div>
+      <button id="finish" class="ml-auto px-4 py-2 rounded-lg font-cond font-bold text-[15px] uppercase tracking-wide text-white disabled:opacity-40 transition-opacity"
+        style="background:rgb(var(--accent))" ${sess && sessionHasWork(sess) ? '' : 'disabled'}>${sess && sess.done ? (sess.autoFinished ? 'Auto-logged ✓' : 'Session logged ✓') : 'Finish session'}</button>
     </div>`);
 }
 </script>
@@ -735,7 +804,7 @@ function renderCardio(){
 /* ═══════════════ Progress view ═══════════════ */
 function renderProgress(){
   document.getElementById('view-progress').style.setProperty('--accent', 'var(--push)');
-  const logged = S.sessions.filter(s => Object.values(s.ex).some(e => e.sets.some(t => t.reps > 0)) || (s.cardio && s.cardio.minutes));
+  const logged = S.sessions.filter(isComplete);
   const tonnage = S.sessions.reduce((n,s) => n + Object.entries(s.ex).reduce((m,[id,e]) =>
       LIFT_BY_ID[id] && LIFT_BY_ID[id].noLoad ? m : m + e.sets.reduce((k,t) => k + (t.kg||0)*(t.reps||0), 0), 0), 0);
   const weeksHit = [...new Set(logged.map(s => weekOf(s.date)))].sort((a,b) => a-b);
@@ -895,7 +964,7 @@ function toast(msg){
 function writeSet(liftId, i, field, value){
   const lift = LIFT_BY_ID[liftId];
   const sess = getSession(lift.day, S.ui.date, true);
-  const e = sess.ex[liftId] || (sess.ex[liftId] = { m:false, sets:[] });
+  const e = sess.ex[liftId] || (sess.ex[liftId] = { sets:[] });
   while (e.sets.length <= i) e.sets.push({});
   const wasBlank = !(e.sets[i].reps > 0);
   if (value === '' || value == null) delete e.sets[i][field];
@@ -909,6 +978,7 @@ function writeSet(liftId, i, field, value){
     }
     startRest(lift.big ? 150 : 75);
   }
+  pruneIfEmpty(sess);
   save();
 }
 function refreshTrain(){ renderDayPicker(); renderPhase(); renderSession(); }
@@ -916,6 +986,29 @@ function refreshTrain(){ renderDayPicker(); renderPhase(); renderSession(); }
 $(function(){
   const stored = load();
   S = (stored && !stored.sample) ? stored : blankState();
+
+  /* Sweep up sessions left open from a previous visit, then keep watching. */
+  function sweepStale(announce){
+    const n = autoFinishStale();
+    if (!n) return;
+    if (announce) toast(n > 1
+      ? n + ' open sessions auto-logged after 3 hours.'
+      : 'Session auto-logged after 3 hours.');
+    if (S.ui.tab === 'train') refreshTrain();
+  }
+  /* A launch always starts on today, whatever was saved last time. */
+  rollDateToToday();
+  autoFinishStale();
+
+  /* Phones suspend the app rather than close it, so a resume days later would
+     otherwise still be painted for the day it went to sleep. */
+  function tick(){
+    if (!dateIsPinned() && rollDateToToday() && S.ui.tab === 'train') refreshTrain();
+    sweepStale(true);
+  }
+  setInterval(tick, 60000);
+  $(document).on('visibilitychange', () => { if (!document.hidden) tick(); });
+  $(window).on('pageshow focus', tick);
 
   /* Dark is not a preference here — the stylesheet has no other mode. */
   document.documentElement.setAttribute('data-theme', 'dark');
@@ -942,7 +1035,9 @@ $(function(){
 
   /* train interactions */
   $('#date').val(S.ui.date).on('change', function(){
-    S.ui.date = $(this).val() || todayISO(); save(); refreshTrain();
+    S.ui.date = $(this).val() || todayISO();
+    handPickedOn = S.ui.date !== todayISO() ? todayISO() : null;
+    save(); refreshTrain();
   });
   $(document).on('click', '.day-btn', function(){ S.ui.day = $(this).data('day'); save(); refreshTrain(); });
 
@@ -970,18 +1065,13 @@ $(function(){
     const next = Math.max(0, Math.round((base + stepBy * $(this).data('d')) * 100) / 100);
     $inp.val(next).trigger('change');
   });
-  $(document).on('click', '.mswap', function(){
-    const id = $(this).data('id'), lift = LIFT_BY_ID[id];
-    const sess = getSession(lift.day, S.ui.date, true);
-    const e = sess.ex[id] || (sess.ex[id] = { m:false, sets:[] });
-    e.m = !e.m; save(); refreshTrain();
-  });
   $(document).on('click', '#finish', function(){
     const sess = getSession(S.ui.day, S.ui.date, false);
-    if (!sess) return;
-    sess.done = true; save();
+    if (!sess || !sessionHasWork(sess)) return;
+    sess.done = true; delete sess.autoFinished; save();
+    if (S.ui.day === 'cardio'){ toast('Cardio logged.'); refreshTrain(); return; }
     const prs = Object.keys(sess.ex).filter(id => {
-      const st = statsFor(id); if (!st || sess.ex[id].m) return false;
+      const st = statsFor(id); if (!st) return false;
       const top = Math.max(0, ...sess.ex[id].sets.map(t => t.kg || 0));
       return top > 0 && top >= st.best && st.sessions > 1;
     });
@@ -993,11 +1083,12 @@ $(function(){
     sess.cardio = sess.cardio || {};
     const k = $(this).data('k');
     sess.cardio[k] = this.type === 'checkbox' ? this.checked : (this.value === '' ? null : (this.type === 'number' ? +this.value : this.value));
+    pruneIfEmpty(sess);
     save();
-    const mins = S.sessions.filter(x => x.day === 'cardio').reduce((n,x) => n + (+(x.cardio && x.cardio.minutes) || 0), 0);
-    const cnt  = S.sessions.filter(x => x.day === 'cardio' && x.cardio && x.cardio.minutes).length;
-    $('#session-foot .tnum').eq(0).text(cnt);
-    $('#session-foot .tnum').eq(1).text(mins);
+    $('#session-foot .tnum').eq(0).text(cardioCount());
+    $('#session-foot .tnum').eq(1).text(cardioMinutes());
+    $('#finish').prop('disabled', !sessionHasWork(sess)).toggleClass('opacity-40', !sessionHasWork(sess));
+    renderDayPicker(); renderPhase();
   });
 
   /* progress interactions */
@@ -1024,7 +1115,18 @@ $(function(){
   $(document).on('click', '#import', function(){
     const txt = window.prompt('Paste a log you copied earlier:');
     if (!txt) return;
-    try { const p = JSON.parse(txt); if (p.v !== 1) throw 0; S = p; save(); showTab('train'); toast('Log restored.'); }
+    try {
+      const p = JSON.parse(txt); if (p.v !== 1) throw 0;
+      S = p;
+      /* An imported log carries the date it was exported on, and its sessions
+         may predate the finish rules — land on today, with the log tidied. */
+      S.ui = S.ui || { tab:'train', day:'push', date: todayISO() };
+      handPickedOn = null;
+      rollDateToToday();
+      S.sessions.slice().forEach(pruneIfEmpty);
+      autoFinishStale();
+      save(); showTab('train'); toast('Log restored.');
+    }
     catch(e){ toast('That didn’t look like a MyWorkoutTracker log.'); }
   });
   $(document).on('click', '#reset', function(){
